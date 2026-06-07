@@ -6,11 +6,11 @@ App({
     this.globalData.systemInfo = systemInfo;
     this.globalData.statusBarHeight = systemInfo.statusBarHeight;
     this.globalData.screenHeight = systemInfo.screenHeight;
-    
-    // 从本地存储恢复 API 配置
-    const apiUrl = wx.getStorageSync('apiUrl');
-    if (apiUrl) {
-      this.globalData.apiUrl = apiUrl;
+
+    // 恢复 API Key（从本地存储）
+    const apiKey = wx.getStorageSync('apiKey');
+    if (apiKey) {
+      this.globalData.hasApiKey = true;
     }
   },
 
@@ -18,9 +18,6 @@ App({
     systemInfo: null,
     statusBarHeight: 0,
     screenHeight: 0,
-    // 后端服务地址（部署后替换）
-    apiUrl: 'https://voice-story-agent.onrender.com',
-    // 如果后端还没部署，可以用这个临时地址（需替换）
-    // apiUrl: 'http://192.168.x.x:5000'
+    hasApiKey: false
   }
 });

@@ -1,10 +1,15 @@
-// pages/index/index.js - 主页逻辑
-const app = getApp();
+// pages/index/index.js - 主页逻辑（直连 DashScope，无需后端）
 const recorderManager = wx.getRecorderManager();
 const innerAudioContext = wx.createInnerAudioContext();
+const dashscope = require('../../utils/dashscope.js');
 
 Page({
   data: {
+    // API Key 状态
+    hasApiKey: false,
+    showApiKeyDialog: false,
+    inputApiKey: '',
+
     // 声音相关
     isRecording: false,
     isPlayingSample: false,
@@ -42,12 +47,22 @@ Page({
     audioCurrentTime: 0,
     audioCurrentTimeText: '00:00',
     audioDurationText: '00:00',
-    audioTimer: null
+    audioTimer: null,
+
+    // 音色 ID
+    _voiceId: ''
   },
 
   onLoad() {
     this.initRecorder();
     this.initAudioPlayer();
+    // 检查是否已有 API Key
+    const apiKey = dashscope.getApiKey();
+    if (apiKey) {
+      this.setData({ hasApiKey: true });
+    } else {
+      this.setData({ showApiKeyDialog: true, hasApiKey: false });
+    }
   },
 
   onUnload() {
@@ -56,7 +71,35 @@ Page({
     innerAudioContext.destroy();
   },
 
-  // ─── 工具函数 ─────────────────────────────────
+  // ─── API Key 管理 ────────────────────────────────
+  showApiKeyInput() {
+    this.setData({ showApiKeyDialog: true, inputApiKey: dashscope.getApiKey() || '' });
+  },
+
+  onApiKeyInput(e) {
+    this.setData({ inputApiKey: e.detail.value });
+  },
+
+  confirmApiKey() {
+    const key = this.data.inputApiKey.trim();
+    if (!key) {
+      wx.showToast({ title: '请输入 API Key', icon: 'none' });
+      return;
+    }
+    dashscope.setApiKey(key);
+    this.setData({ hasApiKey: true, showApiKeyDialog: false });
+    wx.showToast({ title: 'API Key 已保存', icon: 'success' });
+  },
+
+  cancelApiKey() {
+    if (dashscope.getApiKey()) {
+      this.setData({ showApiKeyDialog: false });
+    } else {
+      wx.showToast({ title: '需要 API Key 才能使用', icon: 'none' });
+    }
+  },
+
+  // ─── 工具函数 ────────────────────────────────
   formatTime(seconds) {
     if (!seconds || isNaN(seconds)) return '00:00';
     const m = Math.floor(seconds / 60);
@@ -64,7 +107,7 @@ Page({
     return (m < 10 ? '0' + m : m) + ':' + (s < 10 ? '0' + s : s);
   },
 
-  // ─── 录音功能 ─────────────────────────────────
+  // ─── 录音功能 ────────────────────────────────
   initRecorder() {
     recorderManager.onStart(() => {
       console.log('录音开始');
@@ -82,7 +125,8 @@ Page({
         voiceDuration: Math.round(res.duration / 1000)
       });
       this.stopRecordingTimer();
-      this.uploadVoiceFile(res.tempFilePath, 'recording_' + new Date().getTime() + '.mp3');
+      // 自动上传并克隆声音
+      this.uploadAndCloneVoice(res.tempFilePath);
     });
 
     recorderManager.onError((err) => {
@@ -97,6 +141,10 @@ Page({
     if (this.data.isRecording) {
       recorderManager.stop();
     } else {
+      if (!this.data.hasApiKey) {
+        this.showApiKeyInput();
+        return;
+      }
       wx.authorize({
         scope: 'scope.record',
         success: () => {
@@ -137,8 +185,12 @@ Page({
     }
   },
 
-  // ─── 文件上传 ─────────────────────────────────
+  // ─── 文件选择与上传 ────────────────────────────────
   chooseVoiceFile() {
+    if (!this.data.hasApiKey) {
+      this.showApiKeyInput();
+      return;
+    }
     wx.chooseMessageFile({
       count: 1,
       type: 'file',
@@ -151,7 +203,7 @@ Page({
           voiceFileName: file.name,
           voiceDuration: Math.round(file.size / 32000)
         });
-        this.uploadVoiceFile(file.path, file.name);
+        this.uploadAndCloneVoice(file.path, file.name);
       },
       fail: () => {
         wx.chooseMedia({
@@ -165,42 +217,57 @@ Page({
               voiceFileName: 'upload_' + new Date().getTime() + '.mp3',
               voiceDuration: Math.round(file.duration / 1000)
             });
-            this.uploadVoiceFile(file.tempFilePath, 'upload_' + new Date().getTime() + '.mp3');
+            this.uploadAndCloneVoice(file.tempFilePath, 'upload_' + new Date().getTime() + '.mp3');
           }
         });
       }
     });
   },
 
-  uploadVoiceFile(filePath, fileName) {
-    wx.showLoading({ title: '上传声音样本...' });
-    const apiUrl = app.globalData.apiUrl;
+  /**
+   * 上传音频到 DashScope 并克隆声音
+   */
+  uploadAndCloneVoice(filePath, fileName) {
+    wx.showLoading({ title: '正在上传声音样本...' });
+    this.setData({ uploading: true });
 
-    wx.uploadFile({
-      url: apiUrl + '/api/upload-voice',
-      filePath: filePath,
-      name: 'audio',
-      formData: { filename: fileName },
-      success: (res) => {
+    // Step 1: 上传文件到 DashScope
+    dashscope.uploadVoiceFile(filePath)
+      .then((fileId) => {
+        wx.showLoading({ title: '正在克隆声音...' });
+        console.log('[声伴] 上传成功，file_id:', fileId);
+
+        // Step 2: 克隆声音
+        const voiceName = fileName || ('voice_' + new Date().getTime());
+        return dashscope.cloneVoice(fileId, voiceName);
+      })
+      .then((voiceId) => {
         wx.hideLoading();
-        try {
-          const data = JSON.parse(res.data);
-          if (data.success) {
-            this._voiceId = data.voiceId;
-            wx.showToast({ title: '声音样本已上传', icon: 'success' });
-          } else {
-            wx.showToast({ title: data.error || '上传失败', icon: 'none' });
-          }
-        } catch (e) {
-          wx.showToast({ title: '上传失败', icon: 'none' });
-        }
-      },
-      fail: (err) => {
+        this.data._voiceId = voiceId;
+        this.setData({
+          uploading: false,
+          voiceUploaded: true
+        });
+        wx.showToast({ title: '声音克隆成功！', icon: 'success' });
+        console.log('[声伴] 声音克隆成功，voice_id:', voiceId);
+
+        // Step 3: 等待音色部署就绪
+        return dashscope.waitVoiceReady(voiceId, 180);
+      })
+      .then(() => {
+        console.log('[声伴] 音色部署完成，可以生成故事了');
+        wx.showToast({ title: '音色已就绪，可以生成故事啦！', icon: 'none' });
+      })
+      .catch((err) => {
         wx.hideLoading();
-        console.error('上传失败', err);
-        wx.showToast({ title: '上传失败，请检查网络', icon: 'none' });
-      }
-    });
+        this.setData({ uploading: false });
+        console.error('[声伴] 声音处理失败:', err);
+        wx.showModal({
+          title: '声音处理失败',
+          content: String(err.message || err),
+          showCancel: false
+        });
+      });
   },
 
   playVoiceSample() {
@@ -224,12 +291,12 @@ Page({
       voiceFileName: '',
       voiceDuration: 0,
       voiceFilePath: '',
-      isPlayingSample: false
+      isPlayingSample: false,
+      _voiceId: ''
     });
-    this._voiceId = null;
   },
 
-  // ─── 主题选择 ─────────────────────────────────
+  // ─── 主题选择 ────────────────────────────────
   selectTheme(e) {
     const theme = e.currentTarget.dataset.theme;
     this.setData({
@@ -249,14 +316,18 @@ Page({
     this.setData({ selectedTheme: e.detail.value });
   },
 
-  // ─── 长度选择 ─────────────────────────────────
+  // ─── 长度选择 ────────────────────────────────
   selectLength(e) {
     this.setData({ storyLength: e.currentTarget.dataset.value });
   },
 
-  // ─── 生成故事 ─────────────────────────────────
+  // ─── 生成故事 ────────────────────────────────
   generateStory() {
-    if (!this.data.voiceUploaded) {
+    if (!this.data.hasApiKey) {
+      this.showApiKeyInput();
+      return;
+    }
+    if (!this.data.voiceUploaded || !this.data._voiceId) {
       wx.showToast({ title: '请先上传声音样本', icon: 'none' });
       return;
     }
@@ -267,101 +338,94 @@ Page({
       return;
     }
 
-    if (!this._voiceId) {
-      wx.showToast({ title: '声音样本未上传完成，请重试', icon: 'none' });
-      return;
-    }
+    const lengthMap = { short: 300, medium: 600, long: 1200 };
+    const wordCount = lengthMap[this.data.storyLength] || 600;
 
     this.setData({
       isGenerating: true,
       generateProgress: 0,
-      loadingText: '正在克隆声音...',
+      loadingText: '正在生成故事内容...',
       currentStep: 1,
       generatedStory: '',
       audioFilePath: ''
     });
 
-    const apiUrl = app.globalData.apiUrl;
-    const storyLengthMap = { short: 300, medium: 600, long: 1200 };
-
-    wx.request({
-      url: apiUrl + '/api/generate-story',
-      method: 'POST',
-      header: { 'content-type': 'application/json' },
-      data: {
-        voiceId: this._voiceId,
-        theme: theme,
-        length: storyLengthMap[this.data.storyLength] || 600
-      },
-      success: (res) => {
-        if (res.data && res.data.success) {
-          this.setData({
-            isGenerating: false,
-            generatedStory: res.data.story,
-            audioFilePath: apiUrl + '/output/' + res.data.audioFile,
-            generateProgress: 100,
-            currentStep: 3
-          });
-          this.saveToHistory(res.data.story, theme);
-          wx.showToast({ title: '故事生成完成！', icon: 'success' });
-          setTimeout(() => this.togglePlayStory(), 500);
-        } else {
-          this.onGenerateFail(res.data ? res.data.error : '生成失败');
-        }
-      },
-      fail: (err) => {
-        console.error('生成失败', err);
-        this.onGenerateFail('网络错误，请检查后端服务是否启动');
-      }
-    });
-
     this.simulateProgress();
+
+    // Step 1: 生成故事文本
+    wx.showLoading({ title: '正在创作故事...' });
+    dashscope.generateStory(theme, wordCount)
+      .then((storyText) => {
+        wx.hideLoading();
+        console.log('[声伴] 故事生成成功，字数:', storyText.length);
+        this.setData({
+          generateProgress: 60,
+          loadingText: '正在合成语音...',
+          currentStep: 2,
+          generatedStory: storyText
+        });
+
+        // Step 2: 合成音频
+        wx.showLoading({ title: '正在合成语音...' });
+        return dashscope.synthesizeAudio(this.data._voiceId, storyText);
+      })
+      .then((audioPath) => {
+        wx.hideLoading();
+        this.setData({
+          isGenerating: false,
+          generateProgress: 100,
+          loadingText: '完成！',
+          currentStep: 3,
+          audioFilePath: audioPath
+        });
+        this.stopProgressTimer();
+        this.saveToHistory(this.data.generatedStory, theme);
+        wx.showToast({ title: '故事生成完成！', icon: 'success' });
+        // 自动播放
+        setTimeout(() => this.togglePlayStory(), 800);
+      })
+      .catch((err) => {
+        wx.hideLoading();
+        this.stopProgressTimer();
+        this.setData({ isGenerating: false, currentStep: 0 });
+        console.error('[声伴] 生成失败:', err);
+        wx.showModal({
+          title: '生成失败',
+          content: String(err.message || err),
+          showCancel: false
+        });
+      });
   },
 
   simulateProgress() {
     let progress = 0;
     this._progTimer = setInterval(() => {
-      if (progress < 30) {
-        progress += 2;
-        this.setData({
-          generateProgress: progress,
-          loadingText: '正在克隆声音...',
-          currentStep: 1
-        });
-      } else if (progress < 60) {
-        progress += 1.5;
-        this.setData({
-          generateProgress: progress,
-          loadingText: '正在生成故事内容...',
-          currentStep: 2
-        });
-      } else if (progress < 90) {
-        progress += 1;
-        this.setData({
-          generateProgress: progress,
-          loadingText: '正在合成语音...',
-          currentStep: 3
-        });
-      }
       if (!this.data.isGenerating) {
         clearInterval(this._progTimer);
         this._progTimer = null;
+        return;
+      }
+      if (progress < 30) {
+        progress += 2;
+        this.setData({ generateProgress: progress, loadingText: '正在生成故事内容...', currentStep: 1 });
+      } else if (progress < 60) {
+        progress += 1.5;
+        this.setData({ generateProgress: progress, loadingText: '正在合成语音...', currentStep: 2 });
+      } else if (progress < 90) {
+        progress += 0.8;
+        this.setData({ generateProgress: progress });
       }
     }, 500);
   },
 
-  onGenerateFail(msg) {
-    clearInterval(this._progTimer);
-    this._progTimer = null;
-    this.setData({ isGenerating: false, currentStep: 0 });
-    wx.showModal({
-      title: '生成失败',
-      content: msg || '请稍后重试',
-      showCancel: false
-    });
+  stopProgressTimer() {
+    if (this._progTimer) {
+      clearInterval(this._progTimer);
+      this._progTimer = null;
+    }
   },
 
-  // ─── 音频播放 ─────────────────────────────────
+  // ─── 音频播放 ────────────────────────────────
   initAudioPlayer() {
     innerAudioContext.onPlay(() => {
       this.setData({
@@ -442,20 +506,15 @@ Page({
 
   saveStory() {
     if (!this.data.audioFilePath) return;
-    wx.downloadFile({
-      url: this.data.audioFilePath,
-      success: (res) => {
-        wx.saveFileToDisk({
-          filePath: res.tempFilePath,
-          fileName: '睡前故事_' + new Date().getTime() + '.mp3',
-          success: () => wx.showToast({ title: '已保存', icon: 'success' }),
-          fail: () => wx.showToast({ title: '保存失败', icon: 'none' })
-        });
-      }
+    wx.saveFileToDisk({
+      tempFilePath: this.data.audioFilePath,
+      fileName: '声伴故事_' + new Date().getTime() + '.mp3',
+      success: () => wx.showToast({ title: '已保存', icon: 'success' }),
+      fail: () => wx.showToast({ title: '保存失败', icon: 'none' })
     });
   },
 
-  // ─── 历史记录 ─────────────────────────────────
+  // ─── 历史记录 ────────────────────────────────
   saveToHistory(story, theme) {
     let history = wx.getStorageSync('storyHistory') || [];
     history.unshift({
