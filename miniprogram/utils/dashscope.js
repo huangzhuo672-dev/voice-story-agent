@@ -24,37 +24,37 @@ function getApiKey() {
  */
 function uploadVoiceFile(filePath) {
   return new Promise((resolve, reject) => {
-    // DashScope Files API 不支持小程序直传，改用 base64 方式
-    // 先读取文件内容
     const fs = wx.getFileSystemManager();
     fs.readFile({
       filePath: filePath,
+      encoding: 'base64',
       success(res) {
-        // 用 FormData 方式上传（通过 wx.uploadFile）
-        // DashScope Files API: POST /files
-        wx.uploadFile({
+        // 使用 wx.request 直接 POST base64 数据，绕过 uploadFile 域名限制
+        wx.request({
           url: BASE_URL + '/files',
-          filePath: filePath,
-          name: 'file',
-          formData: {
-            purpose: 'voice-cloning'
-          },
+          method: 'POST',
           header: {
             'Authorization': 'Bearer ' + getApiKey(),
-            'Content-Type': 'multipart/form-data'
+            'Content-Type': 'application/json'
+          },
+          data: {
+            mime_type: 'audio/mp3',
+            purpose: 'voice-cloning',
+            file_content: res.data
           },
           success(uploadRes) {
-            try {
-              const data = JSON.parse(uploadRes.data);
-              const fileId = data.data?.uploaded_files?.[0]?.file_id || data.file_id;
+            if (uploadRes.statusCode === 200) {
+              const fileId = uploadRes.data?.data?.uploaded_files?.[0]?.file_id ||
+                             uploadRes.data?.file_id ||
+                             uploadRes.data?.id;
               if (fileId) {
                 console.log('[DashScope] 上传成功，file_id:', fileId);
                 resolve(fileId);
               } else {
-                reject(new Error('上传失败: ' + JSON.stringify(data)));
+                reject(new Error('上传失败: 未返回 file_id，响应: ' + JSON.stringify(uploadRes.data)));
               }
-            } catch (e) {
-              reject(new Error('解析上传响应失败: ' + uploadRes.data));
+            } else {
+              reject(new Error('上传失败 (' + uploadRes.statusCode + '): ' + JSON.stringify(uploadRes.data)));
             }
           },
           fail(err) {
