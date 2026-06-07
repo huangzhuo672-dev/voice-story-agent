@@ -1,0 +1,75 @@
+<!--pages/history/history.wxml - 历史记录页-->
+<view class="page-container">
+  <view class="header">
+    <text class="title">📜 历史记录</text>
+    <text class="subtitle">重温往日故事</text>
+  </view>
+
+  <!-- 空状态 -->
+  <view class="empty-state" wx:if="{{history.length === 0}}">
+    <text class="empty-icon">📭</text>
+    <text class="empty-text">还没有生成过故事</text>
+    <text class="empty-tip">去首页生成一个吧～</text>
+  </view>
+
+  <!-- 历史列表 -->
+  <view class="history-list" wx:else>
+    <view 
+      class="history-item"
+      wx:for="{{history}}"
+      wx:key="id"
+      bindtap="playHistory"
+      data-index="{{index}}"
+    >
+      <view class="item-header">
+        <view class="item-theme">
+          <text class="theme-icon">📖</text>
+          <text class="theme-text">{{item.theme}}</text>
+        </view>
+        <text class="item-time">{{item.time}}</text>
+      </view>
+      <text class="item-preview">{{item.story}}</text>
+      <view class="item-actions">
+        <view class="item-btn" catchtap="playHistory" data-index="{{index}}">
+          <text>▶️ 播放</text>
+        </view>
+        <view class="item-btn delete" catchtap="deleteHistory" data-index="{{index}}">
+          <text>🗑️ 删除</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 清空按钮 -->
+  <view class="clear-area" wx:if="{{history.length > 0}}">
+    <button class="clear-btn" bindtap="clearAll">🗑️ 清空所有记录</button>
+  </view>
+
+  <!-- 播放弹窗 -->
+  <view class="player-mask" wx:if="{{showPlayer}}" bindtap="closePlayer">
+    <view class="player-modal" catchtap="">
+      <view class="player-header">
+        <text class="player-title">🎧 播放故事</text>
+        <view class="player-close" bindtap="closePlayer">✕</view>
+      </view>
+      <text class="player-theme">{{currentPlay.theme}}</text>
+      <text class="player-time">{{currentPlay.time}}</text>
+      
+      <view class="player-story-text">
+        <text>{{currentPlay.fullStory}}</text>
+      </view>
+
+      <view class="player-controls">
+        <view class="ctrl-btn" bindtap="replayCurrent">
+          <text>⏮️</text>
+        </view>
+        <view class="ctrl-btn play-btn" bindtap="toggleCurrentPlay">
+          <text>{{isPlaying ? '⏸️' : '▶️'}}</text>
+        </view>
+        <view class="ctrl-btn" bindtap="closePlayer">
+          <text>✕</text>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

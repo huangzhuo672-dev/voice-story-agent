@@ -1,0 +1,34 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/history/history"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#1a1a2e",
+    "navigationBarTitleText": "🌙 睡前故事",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#0f0f23",
+    "backgroundTextStyle": "light"
+  },
+  "tabBar": {
+    "color": "#8888aa",
+    "selectedColor": "#e0c3fc",
+    "backgroundColor": "#1a1a2e",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "讲故事",
+        "iconPath": "images/story.png",
+        "selectedIconPath": "images/story-active.png"
+      },
+      {
+        "pagePath": "pages/history/history",
+        "text": "历史记录",
+        "iconPath": "images/history.png",
+        "selectedIconPath": "images/history-active.png"
+      }
+    ]
+  },
+  "sitemapLocation": "sitemap.json"
+}

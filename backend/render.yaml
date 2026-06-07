@@ -1,0 +1,18 @@
+{
+  "builds": [
+    {
+      "src": "app.py",
+      "use": "python:3.13"
+    }
+  ],
+  "env": {
+    "DASHSCOPE_API_KEY": {
+      "required": true,
+      "generator": "secret"
+    }
+  },
+  "deploy": {
+    "startCommand": "gunicorn app:app",
+    "env": "python3.13"
+  }
+}

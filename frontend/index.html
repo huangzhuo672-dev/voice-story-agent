@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<title>🌙 声音克隆睡前故事</title>
+<style>
+  :root {
+    --indigo: #4f46e5;
+    --indigo-light: #818cf8;
+    --purple: #7c3aed;
+    --purple-light: #a78bfa;
+    --pink: #db2777;
+    --navy: #0f0a1e;
+    --navy2: #1a1030;
+    --navy3: #241a40;
+    --card: #1e1535;
+    --border: rgba(139,92,246,0.25);
+    --text: #e2d9f3;
+    --text-dim: #9d8fc0;
+    --gold: #fbbf24;
+    --green: #34d399;
+    --red: #f87171;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--navy); color: var(--text);
+    min-height: 100vh; overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  .stars {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background: radial-gradient(ellipse at 20% 50%, rgba(79,70,229,0.08) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 20%, rgba(124,58,237,0.08) 0%, transparent 60%),
+                var(--navy);
+  }
+  .stars::before {
+    content: ''; position: absolute; inset: 0;
+    background-image:
+      radial-gradient(1px 1px at 10% 20%, rgba(255,255,255,0.6), transparent),
+      radial-gradient(1px 1px at 30% 60%, rgba(255,255,255,0.4), transparent),
+      radial-gradient(1.5px 1.5px at 50% 15%, rgba(255,255,255,0.7), transparent),
+      radial-gradient(1px 1px at 70% 80%, rgba(255,255,255,0.5), transparent),
+      radial-gradient(1px 1px at 90% 40%, rgba(255,255,255,0.6), transparent),
+      radial-gradient(1px 1px at 15% 75%, rgba(255,255,255,0.3), transparent),
+      radial-gradient(1.5px 1.5px at 60% 50%, rgba(255,255,255,0.4), transparent),
+      radial-gradient(1px 1px at 80% 65%, rgba(255,255,255,0.5), transparent),
+      radial-gradient(1px 1px at 40% 90%, rgba(255,255,255,0.3), transparent),
+      radial-gradient(1px 1px at 25% 35%, rgba(255,255,255,0.5), transparent),
+      radial-gradient(1px 1px at 85% 10%, rgba(255,255,255,0.4), transparent),
+      radial-gradient(1.5px 1.5px at 5% 50%, rgba(255,255,255,0.6), transparent),
+      radial-gradient(1px 1px at 55% 70%, rgba(255,255,255,0.4), transparent),
+      radial-gradient(1px 1px at 95% 85%, rgba(255,255,255,0.3), transparent),
+      radial-gradient(1px 1px at 45% 5%, rgba(255,255,255,0.5), transparent);
+  }
+  .container {
+    position: relative; z-index: 1;
+    max-width: 860px; margin: 0 auto; padding: 20px 16px 80px;
+  }
+  header { text-align: center; padding: 30px 0 24px; }
+  .moon-icon {
+    font-size: 48px; display: block; margin-bottom: 10px;
+    filter: drop-shadow(0 0 24px rgba(251,191,36,0.6));
+    animation: float 4s ease-in-out infinite;
+  }
+  @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+  header h1 {
+    font-size: clamp(22px, 5vw, 34px); font-weight: 800;
+    background: linear-gradient(135deg, #f0e6ff, #a78bfa, #818cf8);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  header p { margin-top: 6px; color: var(--text-dim); font-size: 14px; }
+
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 22px; margin-bottom: 18px;
+    backdrop-filter: blur(12px);
+  }
+  .card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+  .step-badge {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--indigo), var(--purple));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; color: white; flex-shrink: 0;
+  }
+  .card-header h2 { font-size: 16px; font-weight: 700; }
+
+  label { display: block; font-size: 13px; color: var(--text-dim); margin-bottom: 6px; font-weight: 500; }
+  input[type="text"], select, textarea {
+    width: 100%; background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 14px; color: var(--text); font-size: 15px;
+    outline: none; transition: border-color 0.2s, box-shadow 0.2s;
+    -webkit-appearance: none;
+  }
+  input:focus, select:focus, textarea:focus {
+    border-color: var(--indigo-light);
+    box-shadow: 0 0 0 3px rgba(79,70,229,0.15);
+  }
+  select option { background: var(--navy2); }
+  textarea { resize: vertical; min-height: 80px; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 500px) { .form-row { grid-template-columns: 1fr; } }
+
+  .record-zone {
+    border: 2px dashed var(--border); border-radius: 16px;
+    padding: 28px 18px; text-align: center; cursor: pointer;
+    transition: all 0.3s;
+  }
+  .record-zone:hover, .record-zone.dragover {
+    border-color: var(--purple-light); background: rgba(124,58,237,0.08);
+  }
+  .record-zone.has-file {
+    border-color: var(--green); border-style: solid; background: rgba(52,211,153,0.05);
+  }
+  .record-icon { font-size: 36px; display: block; margin-bottom: 8px; }
+  .record-zone p { color: var(--text-dim); font-size: 14px; line-height: 1.6; }
+  .record-zone strong { color: var(--text); }
+  #audioFileInput { display: none; }
+  .mic-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: linear-gradient(135deg, var(--indigo), var(--purple));
+    border: none; border-radius: 50px; padding: 10px 20px;
+    color: white; font-size: 14px; font-weight: 600; cursor: pointer;
+    margin-top: 12px; transition: opacity 0.2s, transform 0.1s;
+  }
+  .mic-btn:hover { opacity: 0.9; }
+  .mic-btn.recording {
+    background: linear-gradient(135deg, #dc2626, #9f1239);
+    animation: pulse-red 1.5s ease-in-out infinite;
+  }
+  @keyframes pulse-red {
+    0%,100% { box-shadow: 0 0 0 0 rgba(220,38,38,0.5); }
+    50% { box-shadow: 0 0 0 10px rgba(220,38,38,0); }
+  }
+  .audio-preview { margin-top: 12px; display: none; }
+  .audio-preview audio { width: 100%; border-radius: 8px; }
+
+  .theme-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .chip {
+    padding: 7px 14px; border-radius: 20px; border: 1px solid var(--border);
+    font-size: 13px; cursor: pointer; color: var(--text-dim);
+    transition: all 0.2s; background: transparent; line-height: 1.3;
+  }
+  .chip:hover, .chip.active {
+    background: rgba(79,70,229,0.2); border-color: var(--indigo-light); color: var(--text);
+  }
+  .generate-btn {
+    width: 100%;
+    background: linear-gradient(135deg, var(--indigo), var(--purple), var(--pink));
+    background-size: 200% 200%; animation: gradient-shift 4s ease infinite;
+    border: none; border-radius: 14px; padding: 15px;
+    color: white; font-size: 16px; font-weight: 700; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .generate-btn:hover:not(:disabled) { opacity: 0.92; }
+  .generate-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  @keyframes gradient-shift { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+
+  .progress-card { display: none; }
+  .progress-card.visible { display: block; }
+  .progress-bar-wrap { background: rgba(255,255,255,0.08); border-radius: 100px; height: 8px; overflow: hidden; margin: 12px 0; }
+  .progress-bar-fill {
+    height: 100%; border-radius: 100px;
+    background: linear-gradient(90deg, var(--indigo), var(--purple-light));
+    transition: width 0.6s ease; width: 0%;
+  }
+  .progress-steps { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+  .step-item {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--text-dim);
+    padding: 4px 10px; border-radius: 20px;
+    border: 1px solid var(--border); transition: all 0.3s;
+  }
+  .step-item.active { color: var(--indigo-light); border-color: var(--indigo); background: rgba(79,70,229,0.12); }
+  .step-item.done { color: var(--green); border-color: var(--green); background: rgba(52,211,153,0.08); }
+  .step-item .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .step-item.active .dot { animation: blink 1s ease-in-out infinite; }
+  @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.2; } }
+
+  .result-card { display: none; }
+  .result-card.visible { display: block; }
+  .story-text-box {
+    background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px; font-size: 14px; line-height: 1.9;
+    max-height: 220px; overflow-y: auto; white-space: pre-wrap; margin-bottom: 16px;
+  }
+  .story-text-box::-webkit-scrollbar { width: 3px; }
+  .story-text-box::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  .player-wrap {
+    background: linear-gradient(135deg, rgba(79,70,229,0.15), rgba(124,58,237,0.1));
+    border: 1px solid rgba(139,92,246,0.3); border-radius: 16px; padding: 18px;
+  }
+  .player-title { font-size: 13px; color: var(--text-dim); margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+  #storyAudio { width: 100%; border-radius: 8px; }
+  .download-btn {
+    display: inline-flex; align-items: center; gap: 6px; margin-top: 10px;
+    background: rgba(255,255,255,0.08); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 16px; color: var(--text-dim);
+    font-size: 13px; cursor: pointer; text-decoration: none; transition: all 0.2s;
+  }
+  .download-btn:hover { background: rgba(255,255,255,0.12); color: var(--text); }
+
+  .history-item {
+    display: flex; align-items: center; gap: 12px;
+    background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+    border-radius: 12px; padding: 12px 14px; margin-bottom: 8px;
+  }
+  .history-item-icon { font-size: 20px; flex-shrink: 0; }
+  .history-item-info { flex: 1; min-width: 0; }
+  .history-item-theme { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .history-item-preview { font-size: 12px; color: var(--text-dim); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .history-play-btn {
+    background: linear-gradient(135deg, var(--indigo), var(--purple));
+    border: none; border-radius: 50%; width: 36px; height: 36px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 14px; flex-shrink: 0;
+  }
+
+  .toast {
+    position: fixed; bottom: 24px; left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--navy3); border: 1px solid var(--border);
+    border-radius: 12px; padding: 12px 20px; font-size: 14px;
+    z-index: 999; transition: transform 0.3s ease; max-width: 360px; text-align: center;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .toast.error { border-color: rgba(248,113,113,0.5); color: var(--red); }
+  .toast.success { border-color: rgba(52,211,153,0.5); color: var(--green); }
+
+  .api-notice {
+    background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.3);
+    border-radius: 12px; padding: 14px 16px; font-size: 13px;
+    color: var(--gold); margin-bottom: 18px; display: none; line-height: 1.6;
+  }
+  .section-divider {
+    display: flex; align-items: center; gap: 12px;
+    margin: 6px 0 16px; color: var(--text-dim); font-size: 12px;
+  }
+  .section-divider::before, .section-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+  .tip-text { font-size: 12px; color: var(--text-dim); margin-top: 8px; line-height: 1.6; }
+  .tip-text b { color: var(--indigo-light); }
+
+  /* 移动端录音按钮更大 */
+  @media (max-width: 600px) {
+    .mic-btn { padding: 14px 28px; font-size: 15px; }
+    .card { padding: 18px; }
+    .container { padding: 12px 12px 60px; }
+  }
+</style>
+</head>
+<body>
+<div class="stars"></div>
+<div class="container">
+  <header>
+    <span class="moon-icon">🌙</span>
+    <h1>声音克隆 · 睡前故事</h1>
+    <p>用你喜欢的人的声音，讲一个专属的睡前故事</p>
+  </header>
+
+  <div class="api-notice" id="apiNotice">
+    ⚠️ 后端服务未连接。请确保电脑上的服务已启动（双击 start.bat），且手机和电脑连同一个 WiFi。
+  </div>
+
+  <!-- Step 1: 上传音频 -->
+  <div class="card">
+    <div class="card-header"><div class="step-badge">1</div><h2>上传声音样本</h2></div>
+    <div class="record-zone" id="dropZone">
+      <span class="record-icon" id="dropIcon">🎙️</span>
+      <p id="dropText"><strong>点击选择音频文件</strong><br>支持 WAV / MP3 / M4A，建议 10~20 秒纯人声</p>
+      <input type="file" id="audioFileInput" accept="audio/*"/>
+      <button class="mic-btn" id="micBtn" type="button"><span>🎤</span><span id="micBtnText">实时录音</span></button>
+    </div>
+    <div class="audio-preview" id="audioPreview"><audio controls id="previewAudio"></audio></div>
+    <p class="tip-text">💡 <b>10~20 秒纯人声</b>效果最好。安静环境下朗读一段话，避免背景噪音。</p>
+  </div>
+
+  <!-- Step 2: 故事设置 -->
+  <div class="card">
+    <div class="card-header"><div class="step-badge">2</div><h2>设置故事内容</h2></div>
+    <label>故事主题 <span style="color:var(--red)">*</span></label>
+    <div class="theme-chips" id="themeChips">
+      <button class="chip" data-theme="小星星和月亮的对话">🌟 星月童话</button>
+      <button class="chip" data-theme="森林里的小动物睡前聚会">🌲 森林晚会</button>
+      <button class="chip" data-theme="云朵宝宝寻找彩虹">☁️ 彩虹之旅</button>
+      <button class="chip" data-theme="海底世界的夜晚">🐠 海底夜曲</button>
+      <button class="chip" data-theme="魔法图书馆里的冒险">📚 魔法书馆</button>
+      <button class="chip" data-theme="小熊找家的故事">🐻 小熊回家</button>
+    </div>
+    <input type="text" id="themeInput" placeholder="输入自定义主题…"/>
+    <div class="section-divider">更多设置（可选）</div>
+    <div class="form-row">
+      <div><label>故事风格</label>
+        <select id="styleSelect">
+          <option value="温馨奇幻">温馨奇幻</option>
+          <option value="轻松搞笑">轻松搞笑</option>
+          <option value="浪漫诗意">浪漫诗意</option>
+          <option value="冒险探索">冒险探索</option>
+          <option value="治愈温柔">治愈温柔</option>
+          <option value="神秘奇妙">神秘奇妙</option>
+        </select>
+      </div>
+      <div><label>主角名字</label>
+        <input type="text" id="characterInput" placeholder="例如：小明、Luna…"/>
+      </div>
+    </div>
+  </div>
+
+  <button class="generate-btn" id="generateBtn" type="button"><span>✨</span><span>开始生成故事</span></button>
+
+  <!-- 进度 -->
+  <div class="card progress-card" id="progressCard">
+    <div class="card-header"><div class="step-badge">⟳</div><h2>正在为你创作故事...</h2></div>
+    <p id="progressMessage" style="font-size:14px;color:var(--text-dim);margin-bottom:10px;">准备中...</p>
+    <div class="progress-bar-wrap"><div class="progress-bar-fill" id="progressBarFill"></div></div>
+    <div class="progress-steps">
+      <div class="step-item" id="step-generating_story"><div class="dot"></div>创作故事</div>
+      <div class="step-item" id="step-cloning_voice"><div class="dot"></div>克隆声音</div>
+      <div class="step-item" id="step-waiting_voice"><div class="dot"></div>音色审核</div>
+      <div class="step-item" id="step-synthesizing"><div class="dot"></div>合成音频</div>
+    </div>
+  </div>
+
+  <!-- 结果 -->
+  <div class="card result-card" id="resultCard">
+    <div class="card-header"><div class="step-badge">🌙</div><h2>故事已生成</h2></div>
+    <label style="margin-bottom:8px;">故事全文</label>
+    <div class="story-text-box" id="storyTextBox"></div>
+    <div class="player-wrap">
+      <div class="player-title">🎧 用克隆声音朗读</div>
+      <audio controls id="storyAudio"></audio>
+      <a class="download-btn" id="downloadBtn" download="睡前故事.mp3">⬇️ 下载音频</a>
+    </div>
+  </div>
+
+  <!-- 历史 -->
+  <div class="card" id="historyCard" style="display:none;">
+    <div class="card-header"><div class="step-badge">📖</div><h2>历史故事</h2></div>
+    <div id="historyList"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── 自动检测 API 地址（电脑或手机都能用）──────────────────────────────
+const API_BASE = window.location.origin;
+
+// ─── 状态 ──────────────────────────────────────────────────────────────────
+let selectedFile = null;
+let mediaRecorder = null;
+let recordedChunks = [];
+let isRecording = false;
+let currentTaskId = null;
+let pollTimer = null;
+
+// ─── DOM ───────────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const { dropZone, dropIcon, dropText, audioFileInput, micBtn, micBtnText,
+        audioPreview, previewAudio, themeInput, styleSelect, characterInput,
+        generateBtn, progressCard, progressMessage, progressBarFill,
+        resultCard, storyTextBox, storyAudio, downloadBtn,
+        historyCard, historyList, toast, apiNotice } = {
+  dropZone: $('dropZone'), dropIcon: $('dropIcon'), dropText: $('dropText'),
+  audioFileInput: $('audioFileInput'), micBtn: $('micBtn'), micBtnText: $('micBtnText'),
+  audioPreview: $('audioPreview'), previewAudio: $('previewAudio'),
+  themeInput: $('themeInput'), styleSelect: $('styleSelect'), characterInput: $('characterInput'),
+  generateBtn: $('generateBtn'), progressCard: $('progressCard'),
+  progressMessage: $('progressMessage'), progressBarFill: $('progressBarFill'),
+  resultCard: $('resultCard'), storyTextBox: $('storyTextBox'),
+  storyAudio: $('storyAudio'), downloadBtn: $('downloadBtn'),
+  historyCard: $('historyCard'), historyList: $('historyList'),
+  toast: $('toast'), apiNotice: $('apiNotice'),
+};
+
+function showToast(msg, type='') {
+  toast.textContent = msg;
+  toast.className = 'toast show' + (type ? ' '+type : '');
+  setTimeout(() => toast.className = 'toast', 4000);
+}
+
+// ─── 文件 ──────────────────────────────────────────────────────────────────
+function setAudioFile(file) {
+  if (!file || !file.type.startsWith('audio/')) { showToast('请选择音频文件','error'); return; }
+  selectedFile = file;
+  dropZone.classList.add('has-file');
+  dropIcon.textContent = '✅';
+  dropText.innerHTML = `<strong>${file.name}</strong><br>${(file.size/1024).toFixed(0)} KB`;
+  previewAudio.src = URL.createObjectURL(file);
+  audioPreview.style.display = 'block';
+  showToast('音频已加载','success');
+}
+
+dropZone.addEventListener('click', e => {
+  if (e.target === micBtn || micBtn.contains(e.target)) return;
+  audioFileInput.click();
+});
+audioFileInput.addEventListener('change', e => { if (e.target.files[0]) setAudioFile(e.target.files[0]); });
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('dragover');
+  if (e.dataTransfer.files[0]) setAudioFile(e.dataTransfer.files[0]);
+});
+
+// ─── 录音 ──────────────────────────────────────────────────────────────────
+micBtn.addEventListener('click', async e => {
+  e.stopPropagation();
+  if (!isRecording) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recordedChunks = [];
+      mediaRecorder = new MediaRecorder(stream, {
+        mimeType: MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4'
+      });
+      mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
+        const ext = mediaRecorder.mimeType.includes('webm') ? 'webm' : 'mp4';
+        setAudioFile(new File([blob], `recording_${Date.now()}.${ext}`, { type: mediaRecorder.mimeType }));
+        stream.getTracks().forEach(t => t.stop());
+      };
+      mediaRecorder.start();
+      isRecording = true;
+      micBtn.classList.add('recording');
+      micBtnText.textContent = '点击停止';
+    } catch (err) { showToast('无法访问麦克风：' + err.message, 'error'); }
+  } else {
+    mediaRecorder.stop(); isRecording = false;
+    micBtn.classList.remove('recording');
+    micBtnText.textContent = '实时录音';
+  }
+});
+
+// ─── 主题 ──────────────────────────────────────────────────────────────────
+document.querySelectorAll('.chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    themeInput.value = chip.dataset.theme;
+  });
+});
+themeInput.addEventListener('input', () => document.querySelectorAll('.chip').forEach(c => c.classList.remove('active')));
+
+// ─── 生成 ──────────────────────────────────────────────────────────────────
+generateBtn.addEventListener('click', async () => {
+  if (!selectedFile) { showToast('请先上传或录制声音样本','error'); return; }
+  const theme = themeInput.value.trim();
+  if (!theme) { showToast('请输入故事主题','error'); return; }
+
+  generateBtn.disabled = true;
+  resultCard.classList.remove('visible');
+  progressCard.classList.add('visible');
+  progressBarFill.style.width = '5%';
+  progressMessage.textContent = '正在提交任务…';
+  ['generating_story','cloning_voice','waiting_voice','synthesizing'].forEach(s => {
+    const el = $('step-'+s); if (el) el.className = 'step-item';
+  });
+
+  const formData = new FormData();
+  formData.append('audio', selectedFile);
+  formData.append('theme', theme);
+  formData.append('style', styleSelect.value);
+  formData.append('character', characterInput.value.trim());
+
+  try {
+    const resp = await fetch(`${API_BASE}/api/generate`, { method: 'POST', body: formData });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || '提交失败');
+    currentTaskId = data.task_id;
+    pollStatus();
+  } catch (err) {
+    showToast(err.message, 'error');
+    generateBtn.disabled = false;
+    progressCard.classList.remove('visible');
+  }
+});
+
+// ─── 轮询 ──────────────────────────────────────────────────────────────────
+const STATUS_STEPS = ['generating_story','cloning_voice','waiting_voice','synthesizing'];
+
+function updateStepUI(status) {
+  const idx = STATUS_STEPS.indexOf(status);
+  STATUS_STEPS.forEach((s, i) => {
+    const el = $('step-'+s); if (!el) return;
+    if (i < idx) el.className = 'step-item done';
+    else if (i === idx) el.className = 'step-item active';
+    else el.className = 'step-item';
+  });
+}
+
+function pollStatus() {
+  if (pollTimer) clearTimeout(pollTimer);
+  if (!currentTaskId) return;
+  fetch(`${API_BASE}/api/task/${currentTaskId}`)
+    .then(r => r.json()).then(data => {
+      progressMessage.textContent = data.message || '';
+      progressBarFill.style.width = (data.progress||0) + '%';
+      updateStepUI(data.status);
+      if (data.status === 'completed') {
+        STATUS_STEPS.forEach(s => { const el=$('step-'+s); if(el) el.className='step-item done'; });
+        setTimeout(() => { progressCard.classList.remove('visible'); showResult(data); loadHistory(); }, 600);
+        generateBtn.disabled = false;
+      } else if (data.status === 'failed') {
+        progressCard.classList.remove('visible');
+        showToast('失败：' + (data.error||'未知错误'), 'error');
+        generateBtn.disabled = false;
+      } else { pollTimer = setTimeout(pollStatus, 3000); }
+    }).catch(() => { pollTimer = setTimeout(pollStatus, 5000); });
+}
+
+function showResult(data) {
+  storyTextBox.textContent = data.story_text || '';
+  storyAudio.src = API_BASE + data.audio_url;
+  downloadBtn.href = API_BASE + data.audio_url;
+  resultCard.classList.add('visible');
+  resultCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  showToast('🌙 故事生成完成！','success');
+}
+
+// ─── 历史 ──────────────────────────────────────────────────────────────────
+function loadHistory() {
+  fetch(`${API_BASE}/api/stories`).then(r=>r.json()).then(stories => {
+    if (!stories.length) { historyCard.style.display='none'; return; }
+    historyCard.style.display='block';
+    historyList.innerHTML = stories.map(s => `
+      <div class="history-item">
+        <span class="history-item-icon">🌙</span>
+        <div class="history-item-info">
+          <div class="history-item-theme">${s.theme}</div>
+          <div class="history-item-preview">${s.story_text}</div>
+        </div>
+        <button class="history-play-btn" onclick="playH('${API_BASE+s.audio_url}',this)">▶️</button>
+      </div>
+    `).join('');
+  }).catch(()=>{});
+}
+function playH(url, btn) {
+  storyAudio.src = url; storyAudio.play();
+  resultCard.classList.add('visible');
+  resultCard.scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+// ─── 健康检查 ──────────────────────────────────────────────────────────────
+async function checkBackend() {
+  try {
+    const resp = await fetch(`${API_BASE}/api/health`, { signal: AbortSignal.timeout(4000) });
+    const data = await resp.json();
+    if (!data.api_key_configured) {
+      apiNotice.textContent = '⚠️ 后端 API Key 未配置。请在 backend/.env 中设置 DASHSCOPE_API_KEY。';
+      apiNotice.style.display = 'block';
+    }
+  } catch {
+    apiNotice.innerHTML = '⚠️ 无法连接后端服务。请确保电脑已运行 <b>start.bat</b>，且手机连了同一个 WiFi。';
+    apiNotice.style.display = 'block';
+  }
+}
+checkBackend();
+loadHistory();
+</script>
+</body>
+</html>
