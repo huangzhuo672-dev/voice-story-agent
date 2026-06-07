@@ -95,14 +95,23 @@ def upload_to_dashscope(local_path: str) -> str:
         raise RuntimeError(f"DashScope 文件上传失败 ({resp.status_code}): {resp.text[:200]}")
 
     data = resp.json()
-    file_url = data.get("url") or data.get("data", {}).get("url")
-    file_id  = data.get("id")  or data.get("data", {}).get("id")
+    # DashScope 文件上传返回格式: { data: { uploaded_files: [{ file_id, name }], failed_uploads: [] } }
+    uploaded_files = data.get("uploaded_files", [])
+    if not uploaded_files:
+        uploaded_files = data.get("data", {}).get("uploaded_files", [])
+    if not uploaded_files:
+        file_url = data.get("url") or data.get("data", {}).get("url")
+        file_id  = data.get("id")  or data.get("data", {}).get("id")
+        if file_url:
+            logger.info(f"文件上传成功，URL: {file_url[:60]}...")
+            return file_url
+        if file_id:
+            logger.info(f"文件上传成功，file_id: {file_id}")
+            return f"dashscope://{file_id}"
+        raise RuntimeError(f"无法获取上传文件地址: {data}")
 
-    if file_url:
-        logger.info(f"文件上传成功，URL: {file_url[:60]}...")
-        return file_url
+    file_id = uploaded_files[0].get("file_id", "")
     if file_id:
-        # 用 file_id 构造 URL（DashScope 支持）
         logger.info(f"文件上传成功，file_id: {file_id}")
         return f"dashscope://{file_id}"
 
