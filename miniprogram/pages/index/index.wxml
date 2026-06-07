@@ -4,9 +4,9 @@
   <view class="header">
     <view class="title-row">
       <text class="moon-icon">🌙</text>
-      <text class="title">睡前故事</text>
+      <text class="title">声伴</text>
     </view>
-    <text class="subtitle">用你爱的人的声音，讲好听的故事</text>
+    <text class="subtitle">用你爱的人的声音，伴你入眠</text>
   </view>
 
   <!-- 声音样本区 -->

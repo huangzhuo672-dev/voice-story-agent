@@ -19,7 +19,7 @@ App({
     statusBarHeight: 0,
     screenHeight: 0,
     // 后端服务地址（部署后替换）
-    apiUrl: 'https://your-backend-url.com',
+    apiUrl: 'https://voice-story-agent.onrender.com',
     // 如果后端还没部署，可以用这个临时地址（需替换）
     // apiUrl: 'http://192.168.x.x:5000'
   }
