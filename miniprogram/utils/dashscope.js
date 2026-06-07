@@ -18,6 +18,49 @@ function getApiKey() {
 }
 
 /**
+ * 构建 multipart/form-data 请求体（ArrayBuffer）
+ * @param {ArrayBuffer} fileBuffer 文件二进制数据
+ * @param {string} fileName 文件名
+ * @param {string} purpose 文件用途
+ */
+function buildMultipartBody(fileBuffer, fileName, purpose) {
+  const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2);
+
+  // 构建文本部分
+  const fieldPurpose = `--${boundary}\r\nContent-Disposition: form-data; name="purpose"\r\n\r\n${purpose}\r\n`;
+  const fieldFile = `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${fileName}"\r\nContent-Type: application/octet-stream\r\n\r\n`;
+  const ending = `\r\n--${boundary}--\r\n`;
+
+  // 将文本部分转为 Uint8Array
+  const encode = (str) => {
+    const arr = new Uint8Array(str.length);
+    for (let i = 0; i < str.length; i++) {
+      arr[i] = str.charCodeAt(i) & 0xFF;
+    }
+    return arr;
+  };
+
+  const part1 = encode(fieldPurpose);
+  const part2 = encode(fieldFile);
+  const part3 = new Uint8Array(fileBuffer);
+  const part4 = encode(ending);
+
+  // 合并所有部分
+  const totalLength = part1.length + part2.length + part3.length + part4.length;
+  const combined = new Uint8Array(totalLength);
+  let offset = 0;
+  combined.set(part1, offset); offset += part1.length;
+  combined.set(part2, offset); offset += part2.length;
+  combined.set(part3, offset); offset += part3.length;
+  combined.set(part4, offset);
+
+  return {
+    buffer: combined.buffer,
+    contentType: 'multipart/form-data; boundary=' + boundary
+  };
+}
+
+/**
  * 上传音频文件到 DashScope
  * @param {string} filePath - 本地临时文件路径
  * @returns {Promise<string>} file_id 或 URL
@@ -25,23 +68,24 @@ function getApiKey() {
 function uploadVoiceFile(filePath) {
   return new Promise((resolve, reject) => {
     const fs = wx.getFileSystemManager();
+    // 读取为二进制 ArrayBuffer
     fs.readFile({
       filePath: filePath,
-      encoding: 'base64',
       success(res) {
-        // 使用 wx.request 直接 POST base64 数据，绕过 uploadFile 域名限制
+        const fileBuffer = res.data; // ArrayBuffer
+        const fileName = filePath.split('/').pop() || 'voice.mp3';
+
+        // 手动构建 multipart/form-data 请求体
+        const multipart = buildMultipartBody(fileBuffer, fileName, 'voice-cloning');
+
         wx.request({
           url: BASE_URL + '/files',
           method: 'POST',
           header: {
             'Authorization': 'Bearer ' + getApiKey(),
-            'Content-Type': 'application/json'
+            'Content-Type': multipart.contentType
           },
-          data: {
-            mime_type: 'audio/mp3',
-            purpose: 'voice-cloning',
-            file_content: res.data
-          },
+          data: multipart.buffer,
           success(uploadRes) {
             if (uploadRes.statusCode === 200) {
               const fileId = uploadRes.data?.data?.uploaded_files?.[0]?.file_id ||
