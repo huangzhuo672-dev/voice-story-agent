@@ -208,19 +208,23 @@ function synthesizeAudio(voiceId, text) {
 function synthesizeChunk(voiceId, text) {
   return new Promise(function (resolve, reject) {
     wx.request({
-      url: BASE_URL + '/services/audio/tts/speech',
+      url: BASE_URL + '/services/aigc/multimodal-generation/generation',
       method: 'POST',
       timeout: 180000,
       responseType: 'arraybuffer',
       header: {
         'Authorization': 'Bearer ' + getApiKey(),
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'X-DashScope-OssResourceResolve': 'enable',
+        'X-DashScope-Async': 'enable'
       },
       data: {
         model: 'cosyvoice-v3-plus',
-        input: { text: text },
+        input: {
+          text: text,
+          voice: voiceId
+        },
         parameters: {
-          voice: voiceId,
           response_format: 'mp3',
           sample_rate: 22050
         }
