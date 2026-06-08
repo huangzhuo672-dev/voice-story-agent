@@ -179,10 +179,13 @@ function generateStory(customDesc, category, lengthChars) {
  * @returns {Promise<string>} 本地临时音频路径
  */
 function synthesizeAudio(voiceId, text) {
+  if (!text || !text.trim()) return Promise.resolve([]);
   // 长文本分段（每段最多 2000 字，避免单次请求过大）
   var maxChunk = 2000;
   if (text.length <= maxChunk) {
-    return synthesizeChunk(voiceId, text);
+    return synthesizeChunk(voiceId, text).then(function (path) {
+      return [path];
+    });
   }
   // 按段落边界分段
   var chunks = splitText(text, maxChunk);

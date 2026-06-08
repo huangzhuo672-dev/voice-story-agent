@@ -230,8 +230,7 @@ Page({
         that.stopTimerTicking();
         that.setData({ timerRemaining: 0, timerDisplay: '00:00', timerBarPercent: 0, timerRunning: false });
         // 自动停止播放
-        innerAudioContext.stop();
-        if (bgAudio) bgAudio.stop();
+        if (innerAudioContext) innerAudioContext.stop();
         that.setData({ isPlayingStory: false });
         wx.showToast({ title: '定时关闭，晚安 💤', icon: 'none' });
       } else {
@@ -289,7 +288,7 @@ Page({
       })
       .then(function (audioPaths) {
         wx.hideLoading();
-        var chunks = Array.isArray(audioPaths) ? audioPaths : [audioPaths];
+        var chunks = audioPaths; // always array now
         that.stopProgressSim();
         that.setData({
           isGenerating: false, generateProgress: 100,
@@ -395,11 +394,10 @@ Page({
 
   saveStory: function () {
     if (!this.data.audioChunks.length) return;
-    var that = this;
     var fs = wx.getFileSystemManager();
     var savePath = wx.env.USER_DATA_PATH + '/声伴_' + Date.now() + '.mp3';
     try {
-      fs.saveFileSync(this.data.audioChunks[0], savePath);
+      fs.copyFileSync(this.data.audioChunks[0], savePath);
       wx.showToast({ title: '已保存', icon: 'success' });
     } catch (e) {
       wx.showToast({ title: '保存失败', icon: 'none' });
