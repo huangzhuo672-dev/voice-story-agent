@@ -1,6 +1,6 @@
-// pages/history/history.js
-const app = getApp();
-const innerAudioContext = wx.createInnerAudioContext();
+// pages/history/history.js — 声伴 v2.0
+var app = getApp();
+var audio = wx.createInnerAudioContext();
 
 Page({
   data: {
@@ -8,103 +8,131 @@ Page({
     showPlayer: false,
     currentPlay: null,
     isPlaying: false,
-    _playingIndex: -1
+    chunkIdx: 0,
+    chunkTotal: 0
   },
 
-  onShow() {
-    // 每次显示页面时刷新数据
-    const history = wx.getStorageSync('storyHistory') || [];
-    this.setData({ history });
+  onShow: function () {
+    var history = wx.getStorageSync('storyHistory') || [];
+    this.setData({ history: history });
   },
 
-  onUnload() {
-    innerAudioContext.stop();
-    innerAudioContext.destroy();
+  onUnload: function () {
+    audio.stop();
+    audio.destroy();
   },
 
-  // 播放历史故事
-  playHistory(e) {
-    const index = e.currentTarget.dataset.index;
-    const item = this.data.history[index];
+  playHistory: function (e) {
+    var index = e.currentTarget.dataset.index;
+    var item = this.data.history[index];
     if (!item) return;
 
-    this._playingIndex = index;
+    var chunks = item.audioChunks || [];
     this.setData({
       showPlayer: true,
       currentPlay: item,
-      isPlaying: false
+      isPlaying: false,
+      chunkIdx: 0,
+      chunkTotal: chunks.length || 0
     });
 
-    if (item.audioUrl) {
-      innerAudioContext.src = item.audioUrl;
-      setTimeout(() => {
-        innerAudioContext.play();
-        this.setData({ isPlaying: true });
+    if (chunks.length > 0) {
+      audio.src = chunks[0];
+      var that = this;
+      setTimeout(function () {
+        audio.play();
+        that.setData({ isPlaying: true });
       }, 300);
     }
   },
 
-  toggleCurrentPlay() {
+  toggleCurrentPlay: function () {
     if (this.data.isPlaying) {
-      innerAudioContext.pause();
+      audio.pause();
       this.setData({ isPlaying: false });
     } else {
-      if (this.data.currentPlay && this.data.currentPlay.audioUrl) {
-        innerAudioContext.play();
-        this.setData({ isPlaying: true });
-      }
-    }
-  },
-
-  replayCurrent() {
-    innerAudioContext.stop();
-    if (this.data.currentPlay && this.data.currentPlay.audioUrl) {
-      innerAudioContext.play();
+      audio.play();
       this.setData({ isPlaying: true });
     }
   },
 
-  closePlayer() {
-    innerAudioContext.stop();
-    this.setData({
-      showPlayer: false,
-      isPlaying: false,
-      currentPlay: null
-    });
+  replayCurrent: function () {
+    var item = this.data.currentPlay;
+    if (!item) return;
+    var chunks = item.audioChunks || [];
+    if (chunks.length === 0) return;
+    audio.stop();
+    this.setData({ chunkIdx: 0 });
+    var that = this;
+    setTimeout(function () {
+      audio.src = chunks[0];
+      audio.play();
+      that.setData({ isPlaying: true });
+    }, 200);
   },
 
-  // 删除单条记录
-  deleteHistory(e) {
-    const index = e.currentTarget.dataset.index;
+  closePlayer: function () {
+    audio.stop();
+    this.setData({ showPlayer: false, isPlaying: false, currentPlay: null });
+  },
+
+  deleteHistory: function (e) {
+    var index = e.currentTarget.dataset.index;
+    var that = this;
     wx.showModal({
       title: '确认删除',
       content: '删除后无法恢复',
       confirmColor: '#ff4d4f',
-      success: (res) => {
+      success: function (res) {
         if (res.confirm) {
-          let history = this.data.history;
+          var history = that.data.history;
           history.splice(index, 1);
           wx.setStorageSync('storyHistory', history);
-          this.setData({ history });
+          that.setData({ history: history });
           wx.showToast({ title: '已删除', icon: 'success' });
         }
       }
     });
   },
 
-  // 清空所有记录
-  clearAll() {
+  clearAll: function () {
+    var that = this;
     wx.showModal({
       title: '确认清空',
-      content: '将删除所有历史记录，不可恢复',
+      content: '将删除所有历史记录',
       confirmColor: '#ff4d4f',
-      success: (res) => {
+      success: function (res) {
         if (res.confirm) {
           wx.removeStorageSync('storyHistory');
-          this.setData({ history: [] });
+          that.setData({ history: [] });
           wx.showToast({ title: '已清空', icon: 'success' });
         }
       }
     });
   }
 });
+
+// 处理多段音频的自动切换
+(function () {
+  audio.onEnded(function () {
+    // 获取当前页面
+    var pages = getCurrentPages();
+    if (pages.length === 0) return;
+    var page = pages[pages.length - 1];
+    if (page.route !== 'pages/history/history') return;
+
+    var chunkIdx = page.data.chunkIdx;
+    var chunkTotal = page.data.chunkTotal;
+    if (chunkIdx < chunkTotal - 1 && page.data.currentPlay) {
+      var nextIdx = chunkIdx + 1;
+      var chunks = page.data.currentPlay.audioChunks || [];
+      if (chunks[nextIdx]) {
+        page.setData({ chunkIdx: nextIdx });
+        audio.src = chunks[nextIdx];
+        audio.play();
+      }
+    } else {
+      page.setData({ isPlaying: false });
+    }
+  });
+})();

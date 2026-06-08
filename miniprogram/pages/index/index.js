@@ -1,393 +1,308 @@
-// pages/index/index.js - 主页逻辑（直连 DashScope，无需后端）
-const recorderManager = wx.getRecorderManager();
-const innerAudioContext = wx.createInnerAudioContext();
-const dashscope = require('../../utils/dashscope.js');
+// pages/index/index.js — 声伴 v2.0 声音设计版
+var dashscope = require('../../utils/dashscope.js');
+var innerAudioContext = wx.createInnerAudioContext();
+var bgAudio = null; // 后台播放
 
 Page({
   data: {
-    // API Key 状态
+    // API Key
     hasApiKey: false,
     showApiKeyDialog: false,
     inputApiKey: '',
 
-    // 声音相关
-    isRecording: false,
-    isPlayingSample: false,
-    voiceUploaded: false,
-    voiceFileName: '',
-    voiceDuration: 0,
-    voiceFilePath: '',
-    recordingTime: 0,
-    recordingTimer: null,
-
-    // 故事主题
-    themes: ['星月童话', '森林晚会', '海底探险', '太空漫游', '魔法森林', '勇敢小熊'],
-    selectedTheme: '',
-    customTheme: '',
-
-    // 故事长度
-    lengthOptions: [
-      { label: '短篇', value: 'short', desc: '约1分钟' },
-      { label: '中篇', value: 'medium', desc: '约2分钟' },
-      { label: '长篇', value: 'long', desc: '约4分钟' }
+    // ============ 声音设计 ============
+    voiceStyles: [
+      { id: 'gentle-female',  label: '温柔女声', prompt: '一位温柔的年轻女性，声音轻柔温暖，语速缓慢舒适，像妈妈在床边轻声细语，让人感到安心放松。适合讲述温馨睡前故事。', preview: '宝贝，闭上眼睛，听我给你讲一个温暖的故事……' },
+      { id: 'deep-male',     label: '深沉男声', prompt: '一位温和的中年男性，声音低沉磁性，语速平稳从容，像慈祥的长辈在讲故事，给人安全感。适合讲长篇睡前故事。', preview: '夜深了，让我用声音为你编织一个好梦……' },
+      { id: 'warm-elder',    label: '慈祥长辈', prompt: '一位慈祥的长辈，声音和蔼温和，带着岁月沉淀的温暖，像奶奶在摇椅旁讲故事，让人感到无比安心。', preview: '孩子，躺好了，奶奶给你讲个故事……' },
+      { id: 'clear-youth',   label: '清朗少年', prompt: '一位清朗温和的青年，声音干净明亮，语调轻柔，像邻家大哥哥在夜色中低语，给人宁静陪伴感。', preview: '嘿，今晚让我陪你，讲一个安静的故事……' },
+      { id: 'sweet-girl',    label: '甜美姐姐', prompt: '一位温柔的姐姐，声音甜美柔和，带着关怀的语气，像姐姐哄弟弟妹妹入睡，让人感到被爱和呵护。', preview: '乖，姐姐给你讲个故事，闭上眼睛哦……' },
+      { id: 'calm-neutral',  label: '安静中性', prompt: '一位声音中性温和的讲述者，语气平和舒缓，不带明显性别特征，像深夜电台播音员，让人彻底放松。', preview: '在这个安静的夜晚，为你讲述一个温暖的故事……' }
     ],
-    storyLength: 'medium',
+    selectedVoiceStyle: '',
+    voiceOnline: false,    // 音色是否部署完成
+    voiceCreating: false,  // 音色创建中
+    _voiceId: '',
 
-    // 生成状态
+    // ============ 故事设置 ============
+    categories: [
+      { id: 'fairy-tale',  label: '童话冒险',   desc: '经典童话风格' },
+      { id: 'space',       label: '星空宇宙',   desc: '探索浩瀚宇宙' },
+      { id: 'animal',      label: '动物世界',   desc: '可爱动物朋友' },
+      { id: 'magic',       label: '魔法奇幻',   desc: '神秘的魔法世界' },
+      { id: 'nature',      label: '自然治愈',   desc: '森林海洋的宁静' },
+      { id: 'daily',       label: '日常温暖',   desc: '平凡中的小美好' },
+      { id: 'friendship',  label: '友谊故事',   desc: '好朋友的温暖' },
+      { id: 'growth',      label: '成长勇气',   desc: '勇敢面对挑战' }
+    ],
+    selectedCategory: '',
+    customStoryDesc: '',
+
+    // ============ 故事长度 ============
+    storyMinutes: 10,   // 默认10分钟
+    maxMinutes: 60,
+    minMinutes: 1,
+    storyWordCount: 2500, // 10min * 250 = 2500
+
+    // ============ 定时关闭 ============
+    timerMinutes: 0,     // 0 = 不定时
+    timerOptions: [
+      { label: '不定时',  value: 0 },
+      { label: '15分钟', value: 15 },
+      { label: '30分钟', value: 30 },
+      { label: '45分钟', value: 45 },
+      { label: '60分钟', value: 60 }
+    ],
+    timerRemaining: 0,
+    timerRunning: false,
+    timerDisplay: '',
+    timerBarPercent: 100,
+
+    // ============ 生成状态 ============
     isGenerating: false,
     generateProgress: 0,
     loadingText: '正在准备...',
     currentStep: 0,
 
-    // 生成结果
+    // ============ 播放结果 ============
     generatedStory: '',
-    audioFilePath: '',
+    audioChunks: [],      // 多段音频路径
+    currentChunkIndex: 0,
     isPlayingStory: false,
     audioDuration: 0,
     audioCurrentTime: 0,
     audioCurrentTimeText: '00:00',
     audioDurationText: '00:00',
-    audioTimer: null,
 
-    // 音色 ID
-    _voiceId: ''
+    // 故事文本展开
+    storyExpanded: false
   },
 
-  onLoad() {
-    this.initRecorder();
+  // ==================== 生命周期 ====================
+  onLoad: function () {
     this.initAudioPlayer();
-    // 检查是否已有 API Key
-    const apiKey = dashscope.getApiKey();
-    if (apiKey) {
-      this.setData({ hasApiKey: true });
-    } else {
-      this.setData({ showApiKeyDialog: true, hasApiKey: false });
-    }
+    var key = dashscope.getApiKey();
+    if (key) this.setData({ hasApiKey: true });
+    else this.setData({ showApiKeyDialog: true });
   },
 
-  onUnload() {
-    this.stopRecordingTimer();
-    this.stopAudioTimer();
+  onUnload: function () {
+    this.stopAllTimers();
     innerAudioContext.destroy();
+    if (bgAudio) bgAudio.destroy();
   },
 
-  // ─── API Key 管理 ────────────────────────────────
-  showApiKeyInput() {
+  // ==================== API Key ====================
+  showApiKeyInput: function () {
     this.setData({ showApiKeyDialog: true, inputApiKey: dashscope.getApiKey() || '' });
   },
-
-  onApiKeyInput(e) {
+  onApiKeyInput: function (e) {
     this.setData({ inputApiKey: e.detail.value });
   },
-
-  confirmApiKey() {
-    const key = this.data.inputApiKey.trim();
-    if (!key) {
-      wx.showToast({ title: '请输入 API Key', icon: 'none' });
-      return;
-    }
-    dashscope.setApiKey(key);
+  confirmApiKey: function () {
+    var k = this.data.inputApiKey.trim();
+    if (!k) { wx.showToast({ title: '请输入 API Key', icon: 'none' }); return; }
+    dashscope.setApiKey(k);
     this.setData({ hasApiKey: true, showApiKeyDialog: false });
     wx.showToast({ title: 'API Key 已保存', icon: 'success' });
   },
+  cancelApiKey: function () {
+    if (dashscope.getApiKey()) this.setData({ showApiKeyDialog: false });
+    else wx.showToast({ title: '需要 API Key', icon: 'none' });
+  },
 
-  cancelApiKey() {
-    if (dashscope.getApiKey()) {
-      this.setData({ showApiKeyDialog: false });
-    } else {
-      wx.showToast({ title: '需要 API Key 才能使用', icon: 'none' });
+  // ==================== 工具 ====================
+  formatTime: function (s) {
+    if (!s || isNaN(s)) return '00:00';
+    var m = Math.floor(s / 60);
+    var sec = Math.floor(s % 60);
+    return (m < 10 ? '0' + m : m) + ':' + (sec < 10 ? '0' + sec : sec);
+  },
+
+  // ==================== 声音设计 ====================
+  selectVoiceStyle: function (e) {
+    var id = e.currentTarget.dataset.id;
+    this.setData({ selectedVoiceStyle: id });
+  },
+
+  createVoiceNow: function () {
+    if (!this.data.selectedVoiceStyle) {
+      wx.showToast({ title: '请先选择一个声音风格', icon: 'none' });
+      return;
     }
+    if (!this.data.hasApiKey) { this.showApiKeyInput(); return; }
+    var style = this.data.voiceStyles.find(function (s) { return s.id === this.data.selectedVoiceStyle; }.bind(this));
+    if (!style) return;
+
+    this.setData({ voiceCreating: true });
+    wx.showLoading({ title: '正在创建声音...' });
+
+    dashscope.createVoice(style.prompt, style.preview, 'sb')
+      .then(function (res) {
+        wx.hideLoading();
+        this.data._voiceId = res.voiceId;
+        console.log('[声伴] 声音创建成功:', res.voiceId);
+        wx.showToast({ title: '声音已创建，等待审核...', icon: 'none' });
+
+        // 等待部署
+        wx.showLoading({ title: '音色审核中(约30s)...' });
+        return dashscope.waitVoiceReady(res.voiceId, 300);
+      }.bind(this))
+      .then(function () {
+        wx.hideLoading();
+        this.setData({ voiceCreating: false, voiceOnline: true });
+        wx.showToast({ title: '音色就绪，可以生成故事啦！', icon: 'success' });
+      }.bind(this))
+      .catch(function (err) {
+        wx.hideLoading();
+        this.setData({ voiceCreating: false });
+        console.error('[声伴] 声音创建失败:', err);
+        wx.showModal({
+          title: '声音创建失败',
+          content: String(err.message || err),
+          showCancel: false
+        });
+      }.bind(this));
   },
 
-  // ─── 工具函数 ────────────────────────────────
-  formatTime(seconds) {
-    if (!seconds || isNaN(seconds)) return '00:00';
-    const m = Math.floor(seconds / 60);
-    const s = Math.floor(seconds % 60);
-    return (m < 10 ? '0' + m : m) + ':' + (s < 10 ? '0' + s : s);
+  // ==================== 故事分类 ====================
+  selectCategory: function (e) {
+    var id = e.currentTarget.dataset.id;
+    // 支持取消选择
+    this.setData({ selectedCategory: this.data.selectedCategory === id ? '' : id });
   },
 
-  // ─── 录音功能 ────────────────────────────────
-  initRecorder() {
-    recorderManager.onStart(() => {
-      console.log('录音开始');
-      this.setData({ isRecording: true, recordingTime: 0 });
-      this.startRecordingTimer();
+  // 随机选择分类
+  randomCategory: function () {
+    var cats = this.data.categories;
+    var idx = Math.floor(Math.random() * cats.length);
+    this.setData({ selectedCategory: cats[idx].id });
+    wx.showToast({ title: '随机选中: ' + cats[idx].label, icon: 'none', duration: 1200 });
+  },
+
+  // ==================== 自定义故事描述 ====================
+  onStoryDescInput: function (e) {
+    this.setData({ customStoryDesc: e.detail.value });
+  },
+
+  // ==================== 故事长度滑块 ====================
+  onLengthChange: function (e) {
+    var minutes = e.detail.value;
+    this.setData({
+      storyMinutes: minutes,
+      storyWordCount: Math.round(minutes * dashscope.CHARS_PER_MINUTE)
     });
+  },
 
-    recorderManager.onStop((res) => {
-      console.log('录音结束', res);
+  // ==================== 定时关闭 ====================
+  selectTimer: function (e) {
+    var val = Number(e.currentTarget.dataset.value);
+    if (val === 0) {
+      // 取消定时
       this.setData({
-        isRecording: false,
-        voiceUploaded: true,
-        voiceFilePath: res.tempFilePath,
-        voiceFileName: '录音样本_' + new Date().getTime() + '.mp3',
-        voiceDuration: Math.round(res.duration / 1000)
+        timerMinutes: 0,
+        timerRunning: false,
+        timerRemaining: 0,
+        timerDisplay: '',
+        timerBarPercent: 100
       });
-      this.stopRecordingTimer();
-      // 自动上传并克隆声音
-      this.uploadAndCloneVoice(res.tempFilePath);
-    });
-
-    recorderManager.onError((err) => {
-      console.error('录音错误', err);
-      wx.showToast({ title: '录音失败', icon: 'none' });
-      this.setData({ isRecording: false });
-      this.stopRecordingTimer();
-    });
-  },
-
-  toggleRecord() {
-    if (this.data.isRecording) {
-      recorderManager.stop();
+      this.stopTimerTicking();
     } else {
-      if (!this.data.hasApiKey) {
-        this.showApiKeyInput();
-        return;
-      }
-      wx.authorize({
-        scope: 'scope.record',
-        success: () => {
-          recorderManager.start({
-            duration: 30000,
-            sampleRate: 16000,
-            numberOfChannels: 1,
-            format: 'mp3',
-            frameSize: 1
-          });
-        },
-        fail: () => {
-          wx.showModal({
-            title: '需要录音权限',
-            content: '请在设置中开启录音权限',
-            confirmText: '去设置',
-            success(res) {
-              if (res.confirm) wx.openSetting();
-            }
-          });
-        }
+      this.setData({
+        timerMinutes: val,
+        timerRunning: true,
+        timerRemaining: val * 60,
+        timerDisplay: this.formatTime(val * 60),
+        timerBarPercent: 100
       });
+      this.startTimerTicking();
     }
   },
 
-  startRecordingTimer() {
-    this._recTimer = setInterval(() => {
-      if (this.data.recordingTime < 30) {
-        this.setData({ recordingTime: this.data.recordingTime + 1 });
+  startTimerTicking: function () {
+    this.stopTimerTicking();
+    var that = this;
+    this._timerTicker = setInterval(function () {
+      var remaining = that.data.timerRemaining - 1;
+      if (remaining <= 0) {
+        that.stopTimerTicking();
+        that.setData({ timerRemaining: 0, timerDisplay: '00:00', timerBarPercent: 0, timerRunning: false });
+        // 自动停止播放
+        innerAudioContext.stop();
+        if (bgAudio) bgAudio.stop();
+        that.setData({ isPlayingStory: false });
+        wx.showToast({ title: '定时关闭，晚安 💤', icon: 'none' });
+      } else {
+        var percent = Math.round((remaining / (that.data.timerMinutes * 60)) * 100);
+        that.setData({
+          timerRemaining: remaining,
+          timerDisplay: that.formatTime(remaining),
+          timerBarPercent: percent
+        });
       }
     }, 1000);
   },
 
-  stopRecordingTimer() {
-    if (this._recTimer) {
-      clearInterval(this._recTimer);
-      this._recTimer = null;
+  stopTimerTicking: function () {
+    if (this._timerTicker) { clearInterval(this._timerTicker); this._timerTicker = null; }
+  },
+
+  // ==================== 生成故事 ====================
+  onGenerate: function () {
+    if (!this.data.hasApiKey) { this.showApiKeyInput(); return; }
+    if (!this.data._voiceId || !this.data.voiceOnline) {
+      wx.showToast({ title: '请先创建声音', icon: 'none' }); return;
     }
-  },
-
-  // ─── 文件选择与上传 ────────────────────────────────
-  chooseVoiceFile() {
-    if (!this.data.hasApiKey) {
-      this.showApiKeyInput();
-      return;
-    }
-    wx.chooseMessageFile({
-      count: 1,
-      type: 'file',
-      extension: ['mp3', 'wav', 'm4a', 'aac', 'flac'],
-      success: (res) => {
-        const file = res.tempFiles[0];
-        this.setData({
-          voiceUploaded: true,
-          voiceFilePath: file.path,
-          voiceFileName: file.name,
-          voiceDuration: Math.round(file.size / 32000)
-        });
-        this.uploadAndCloneVoice(file.path, file.name);
-      },
-      fail: () => {
-        wx.chooseMedia({
-          count: 1,
-          mediaType: ['file'],
-          success: (res) => {
-            const file = res.tempFiles[0];
-            this.setData({
-              voiceUploaded: true,
-              voiceFilePath: file.tempFilePath,
-              voiceFileName: 'upload_' + new Date().getTime() + '.mp3',
-              voiceDuration: Math.round(file.duration / 1000)
-            });
-            this.uploadAndCloneVoice(file.tempFilePath, 'upload_' + new Date().getTime() + '.mp3');
-          }
-        });
-      }
-    });
-  },
-
-  /**
-   * 上传音频到 DashScope 并克隆声音
-   */
-  uploadAndCloneVoice(filePath, fileName) {
-    wx.showLoading({ title: '正在上传声音样本...' });
-    this.setData({ uploading: true });
-
-    // Step 1: 上传文件到 DashScope
-    dashscope.uploadVoiceFile(filePath)
-      .then((fileId) => {
-        wx.showLoading({ title: '正在克隆声音...' });
-        console.log('[声伴] 上传成功，file_id:', fileId);
-
-        // Step 2: 克隆声音
-        const voiceName = fileName || ('voice_' + new Date().getTime());
-        return dashscope.cloneVoice(fileId, voiceName);
-      })
-      .then((voiceId) => {
-        wx.hideLoading();
-        this.data._voiceId = voiceId;
-        this.setData({
-          uploading: false,
-          voiceUploaded: true
-        });
-        wx.showToast({ title: '声音克隆成功！', icon: 'success' });
-        console.log('[声伴] 声音克隆成功，voice_id:', voiceId);
-
-        // Step 3: 等待音色部署就绪
-        return dashscope.waitVoiceReady(voiceId, 180);
-      })
-      .then(() => {
-        console.log('[声伴] 音色部署完成，可以生成故事了');
-        wx.showToast({ title: '音色已就绪，可以生成故事啦！', icon: 'none' });
-      })
-      .catch((err) => {
-        wx.hideLoading();
-        this.setData({ uploading: false });
-        console.error('[声伴] 声音处理失败:', err);
-        wx.showModal({
-          title: '声音处理失败',
-          content: String(err.message || err),
-          showCancel: false
-        });
-      });
-  },
-
-  playVoiceSample() {
-    if (this.data.isPlayingSample) {
-      innerAudioContext.stop();
-      this.setData({ isPlayingSample: false });
-      return;
-    }
-    if (!this.data.voiceFilePath) return;
-    innerAudioContext.src = this.data.voiceFilePath;
-    innerAudioContext.play();
-    this.setData({ isPlayingSample: true });
-    innerAudioContext.onEnded(() => {
-      this.setData({ isPlayingSample: false });
-    });
-  },
-
-  deleteVoiceSample() {
-    this.setData({
-      voiceUploaded: false,
-      voiceFileName: '',
-      voiceDuration: 0,
-      voiceFilePath: '',
-      isPlayingSample: false,
-      _voiceId: ''
-    });
-  },
-
-  // ─── 主题选择 ────────────────────────────────
-  selectTheme(e) {
-    const theme = e.currentTarget.dataset.theme;
-    this.setData({
-      selectedTheme: this.data.selectedTheme === theme ? '' : theme,
-      customTheme: ''
-    });
-  },
-
-  onCustomThemeInput(e) {
-    this.setData({
-      customTheme: e.detail.value,
-      selectedTheme: ''
-    });
-  },
-
-  onCustomThemeConfirm(e) {
-    this.setData({ selectedTheme: e.detail.value });
-  },
-
-  // ─── 长度选择 ────────────────────────────────
-  selectLength(e) {
-    this.setData({ storyLength: e.currentTarget.dataset.value });
-  },
-
-  // ─── 生成故事 ────────────────────────────────
-  generateStory() {
-    if (!this.data.hasApiKey) {
-      this.showApiKeyInput();
-      return;
-    }
-    if (!this.data.voiceUploaded || !this.data._voiceId) {
-      wx.showToast({ title: '请先上传声音样本', icon: 'none' });
-      return;
+    if (!this.data.customStoryDesc.trim() && !this.data.selectedCategory) {
+      wx.showToast({ title: '请选择分类或输入故事描述', icon: 'none' }); return;
     }
 
-    const theme = this.data.customTheme || this.data.selectedTheme;
-    if (!theme) {
-      wx.showToast({ title: '请选择或输入故事主题', icon: 'none' });
-      return;
-    }
-
-    const lengthMap = { short: 300, medium: 600, long: 1200 };
-    const wordCount = lengthMap[this.data.storyLength] || 600;
+    var that = this;
+    var category = this.data.selectedCategory || '';
+    var desc = this.data.customStoryDesc.trim();
+    var wordCount = this.data.storyWordCount;
 
     this.setData({
-      isGenerating: true,
-      generateProgress: 0,
-      loadingText: '正在生成故事内容...',
-      currentStep: 1,
-      generatedStory: '',
-      audioFilePath: ''
+      isGenerating: true, generateProgress: 0,
+      loadingText: '正在创作故事...', currentStep: 1,
+      generatedStory: '', audioChunks: []
     });
 
-    this.simulateProgress();
+    this.startProgressSim();
 
     // Step 1: 生成故事文本
     wx.showLoading({ title: '正在创作故事...' });
-    dashscope.generateStory(theme, wordCount)
-      .then((storyText) => {
+    dashscope.generateStory(desc, category, wordCount)
+      .then(function (text) {
         wx.hideLoading();
-        console.log('[声伴] 故事生成成功，字数:', storyText.length);
-        this.setData({
-          generateProgress: 60,
-          loadingText: '正在合成语音...',
-          currentStep: 2,
-          generatedStory: storyText
+        console.log('[声伴] 故事:', text.length, '字');
+        that.setData({
+          generateProgress: 40, loadingText: '正在合成语音...',
+          currentStep: 2, generatedStory: text
         });
 
-        // Step 2: 合成音频
+        // Step 2: TTS 合成
         wx.showLoading({ title: '正在合成语音...' });
-        return dashscope.synthesizeAudio(this.data._voiceId, storyText);
+        return dashscope.synthesizeAudio(that.data._voiceId, text);
       })
-      .then((audioPath) => {
+      .then(function (audioPaths) {
         wx.hideLoading();
-        this.setData({
-          isGenerating: false,
-          generateProgress: 100,
-          loadingText: '完成！',
-          currentStep: 3,
-          audioFilePath: audioPath
+        var chunks = Array.isArray(audioPaths) ? audioPaths : [audioPaths];
+        that.stopProgressSim();
+        that.setData({
+          isGenerating: false, generateProgress: 100,
+          loadingText: '完成！', currentStep: 3,
+          audioChunks: chunks, currentChunkIndex: 0
         });
-        this.stopProgressTimer();
-        this.saveToHistory(this.data.generatedStory, theme);
+        that.saveToHistory(that.data.generatedStory);
         wx.showToast({ title: '故事生成完成！', icon: 'success' });
         // 自动播放
-        setTimeout(() => this.togglePlayStory(), 800);
+        setTimeout(function () { that.togglePlayStory(); }, 600);
       })
-      .catch((err) => {
+      .catch(function (err) {
         wx.hideLoading();
-        this.stopProgressTimer();
-        this.setData({ isGenerating: false, currentStep: 0 });
+        that.stopProgressSim();
+        that.setData({ isGenerating: false, currentStep: 0 });
         console.error('[声伴] 生成失败:', err);
         wx.showModal({
           title: '生成失败',
@@ -397,135 +312,115 @@ Page({
       });
   },
 
-  simulateProgress() {
-    let progress = 0;
-    this._progTimer = setInterval(() => {
-      if (!this.data.isGenerating) {
-        clearInterval(this._progTimer);
-        this._progTimer = null;
-        return;
-      }
-      if (progress < 30) {
-        progress += 2;
-        this.setData({ generateProgress: progress, loadingText: '正在生成故事内容...', currentStep: 1 });
-      } else if (progress < 60) {
-        progress += 1.5;
-        this.setData({ generateProgress: progress, loadingText: '正在合成语音...', currentStep: 2 });
-      } else if (progress < 90) {
-        progress += 0.8;
-        this.setData({ generateProgress: progress });
-      }
+  // ── 模拟进度 ──
+  startProgressSim: function () {
+    var that = this;
+    var p = 0;
+    this._progTimer = setInterval(function () {
+      if (!that.data.isGenerating) { clearInterval(that._progTimer); return; }
+      if (p < 30) { p += 2; that.setData({ generateProgress: p, loadingText: '正在创作故事...', currentStep: 1 }); }
+      else if (p < 60) { p += 1; that.setData({ generateProgress: p, loadingText: '正在合成语音...', currentStep: 2 }); }
+      else if (p < 95) { p += 0.5; that.setData({ generateProgress: Math.round(p) }); }
     }, 500);
   },
-
-  stopProgressTimer() {
-    if (this._progTimer) {
-      clearInterval(this._progTimer);
-      this._progTimer = null;
-    }
+  stopProgressSim: function () {
+    if (this._progTimer) { clearInterval(this._progTimer); this._progTimer = null; }
   },
 
-  // ─── 音频播放 ────────────────────────────────
-  initAudioPlayer() {
-    innerAudioContext.onPlay(() => {
-      this.setData({
-        isPlayingStory: true,
-        audioCurrentTimeText: this.formatTime(Math.floor(innerAudioContext.currentTime))
-      });
-      this.startAudioTimer();
+  // ==================== 播放 ====================
+  initAudioPlayer: function () {
+    var that = this;
+    innerAudioContext.onPlay(function () {
+      that.setData({ isPlayingStory: true });
     });
-
-    innerAudioContext.onPause(() => {
-      this.setData({ isPlayingStory: false });
-      this.stopAudioTimer();
+    innerAudioContext.onPause(function () { that.setData({ isPlayingStory: false }); });
+    innerAudioContext.onStop(function () {
+      that.setData({ isPlayingStory: false, audioCurrentTime: 0, audioCurrentTimeText: '00:00' });
     });
-
-    innerAudioContext.onStop(() => {
-      this.setData({ isPlayingStory: false, audioCurrentTime: 0, audioCurrentTimeText: '00:00' });
-      this.stopAudioTimer();
+    innerAudioContext.onEnded(function () {
+      // 播放下一段
+      if (that.data.currentChunkIndex < that.data.audioChunks.length - 1) {
+        var nextIdx = that.data.currentChunkIndex + 1;
+        that.setData({ currentChunkIndex: nextIdx });
+        innerAudioContext.src = that.data.audioChunks[nextIdx];
+        innerAudioContext.play();
+      } else {
+        that.setData({ isPlayingStory: false, audioCurrentTime: 0, audioCurrentTimeText: '00:00' });
+      }
     });
-
-    innerAudioContext.onEnded(() => {
-      this.setData({ isPlayingStory: false, audioCurrentTime: 0, audioCurrentTimeText: '00:00' });
-      this.stopAudioTimer();
+    innerAudioContext.onTimeUpdate(function () {
+      var t = Math.floor(innerAudioContext.currentTime);
+      that.setData({ audioCurrentTime: t, audioCurrentTimeText: that.formatTime(t) });
     });
-
-    innerAudioContext.onTimeUpdate(() => {
-      const t = Math.floor(innerAudioContext.currentTime);
-      this.setData({
-        audioCurrentTime: t,
-        audioCurrentTimeText: this.formatTime(t)
-      });
-    });
-
-    innerAudioContext.onDurationChange(() => {
-      const d = Math.floor(innerAudioContext.duration) || 0;
-      this.setData({
-        audioDuration: d,
-        audioDurationText: this.formatTime(d)
-      });
+    innerAudioContext.onDurationChange(function () {
+      var d = Math.floor(innerAudioContext.duration) || 0;
+      that.setData({ audioDuration: d, audioDurationText: that.formatTime(d) });
     });
   },
 
-  togglePlayStory() {
+  togglePlayStory: function () {
     if (this.data.isPlayingStory) {
       innerAudioContext.pause();
     } else {
-      if (!this.data.audioFilePath) return;
-      innerAudioContext.src = this.data.audioFilePath;
+      if (!this.data.audioChunks.length) return;
+      innerAudioContext.src = this.data.audioChunks[this.data.currentChunkIndex];
       innerAudioContext.play();
     }
   },
 
-  replayStory() {
+  replayStory: function () {
     innerAudioContext.stop();
-    innerAudioContext.play();
+    this.setData({ currentChunkIndex: 0 });
+    setTimeout(function () {
+      innerAudioContext.src = this.data.audioChunks[0];
+      innerAudioContext.play();
+    }.bind(this), 200);
   },
 
-  onSliderChange(e) {
-    const time = e.detail.value;
-    innerAudioContext.seek(time);
-    this.setData({ audioCurrentTime: time, audioCurrentTimeText: this.formatTime(time) });
+  onSliderChange: function (e) {
+    var t = e.detail.value;
+    innerAudioContext.seek(t);
+    this.setData({ audioCurrentTime: t, audioCurrentTimeText: this.formatTime(t) });
   },
 
-  startAudioTimer() {
-    this._audioTimer = setInterval(() => {
-      this.setData({
-        audioCurrentTime: Math.floor(innerAudioContext.currentTime),
-        audioCurrentTimeText: this.formatTime(Math.floor(innerAudioContext.currentTime))
-      });
-    }, 1000);
+  onToggleStory: function () {
+    this.setData({ storyExpanded: !this.data.storyExpanded });
   },
 
-  stopAudioTimer() {
-    if (this._audioTimer) {
-      clearInterval(this._audioTimer);
-      this._audioTimer = null;
-    }
-  },
-
-  saveStory() {
-    if (!this.data.audioFilePath) return;
+  saveStory: function () {
+    if (!this.data.audioChunks.length) return;
+    // 微信保存音频（只保存第一段，完整保存需要拼接，略复杂）
     wx.saveFileToDisk({
-      tempFilePath: this.data.audioFilePath,
-      fileName: '声伴故事_' + new Date().getTime() + '.mp3',
-      success: () => wx.showToast({ title: '已保存', icon: 'success' }),
-      fail: () => wx.showToast({ title: '保存失败', icon: 'none' })
+      tempFilePath: this.data.audioChunks[0],
+      fileName: '声伴_' + Date.now() + '.mp3',
+      success: function () { wx.showToast({ title: '已保存', icon: 'success' }); },
+      fail: function () { wx.showToast({ title: '保存失败', icon: 'none' }); }
     });
   },
 
-  // ─── 历史记录 ────────────────────────────────
-  saveToHistory(story, theme) {
-    let history = wx.getStorageSync('storyHistory') || [];
+  // ==================== 历史记录 ====================
+  saveToHistory: function (story) {
+    var history = wx.getStorageSync('storyHistory') || [];
+    var style = this.data.voiceStyles.find(function (s) { return s.id === this.data.selectedVoiceStyle; }.bind(this));
+    var cat = this.data.categories.find(function (c) { return c.id === this.data.selectedCategory; });
     history.unshift({
-      id: new Date().getTime(),
-      theme: theme,
-      story: story.substring(0, 100) + '...',
-      fullStory: story,
-      audioUrl: this.data.audioFilePath,
+      id: Date.now(),
+      story: (story || '').substring(0, 120) + '...',
+      fullStory: story || '',
+      audioChunks: this.data.audioChunks,
+      voiceStyle: style ? style.label : '',
+      category: cat ? cat.label : '',
+      desc: this.data.customStoryDesc,
+      minutes: this.data.storyMinutes,
       time: new Date().toLocaleString()
     });
     if (history.length > 50) history = history.slice(0, 50);
     wx.setStorageSync('storyHistory', history);
+  },
+
+  // ==================== 清理 ====================
+  stopAllTimers: function () {
+    this.stopProgressSim();
+    this.stopTimerTicking();
   }
 });

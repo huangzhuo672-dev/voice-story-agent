@@ -1,314 +1,272 @@
 /**
- * DashScope API 直接调用封装
- * 小程序直连阿里云，无需后端服务器
+ * DashScope API 封装 — 声音设计 + 故事生成 + 语音合成
+ * 声伴 v2.0 | 用你理想的声音，伴你入眠
  * 文档：https://help.aliyun.com/zh/model-studio/
  */
 
-const API_KEY = wx.getStorageSync('apiKey') || '';
 const BASE_URL = 'https://dashscope.aliyuncs.com/api/v1';
 
-// 设置 API Key
+// 取值：中文语速约 250 字/分钟
+const CHARS_PER_MINUTE = 250;
+const MAX_MINUTES = 60;
+const MAX_CHARS = Math.round(CHARS_PER_MINUTE * MAX_MINUTES); // 15,000
+
+// ── API Key ──────────────────────────────────────────
 function setApiKey(key) {
   wx.setStorageSync('apiKey', key);
 }
-
-// 获取存储的 API Key
 function getApiKey() {
   return wx.getStorageSync('apiKey') || '';
 }
 
-/**
- * 构建 multipart/form-data 请求体（ArrayBuffer）
- * @param {ArrayBuffer} fileBuffer 文件二进制数据
- * @param {string} fileName 文件名
- * @param {string} purpose 文件用途
- */
-function buildMultipartBody(fileBuffer, fileName, purpose) {
-  const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2);
-
-  // 构建文本部分
-  const fieldPurpose = `--${boundary}\r\nContent-Disposition: form-data; name="purpose"\r\n\r\n${purpose}\r\n`;
-  const fieldFile = `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${fileName}"\r\nContent-Type: application/octet-stream\r\n\r\n`;
-  const ending = `\r\n--${boundary}--\r\n`;
-
-  // 将文本部分转为 Uint8Array
-  const encode = (str) => {
-    const arr = new Uint8Array(str.length);
-    for (let i = 0; i < str.length; i++) {
-      arr[i] = str.charCodeAt(i) & 0xFF;
-    }
-    return arr;
+// ── 请求封装 ──────────────────────────────────────────
+function apiPost(path, data, responseType) {
+  var opts = {
+    url: BASE_URL + path,
+    method: 'POST',
+    header: {
+      'Authorization': 'Bearer ' + getApiKey(),
+      'Content-Type': 'application/json'
+    },
+    data: data,
+    success: null,
+    fail: null
   };
-
-  const part1 = encode(fieldPurpose);
-  const part2 = encode(fieldFile);
-  const part3 = new Uint8Array(fileBuffer);
-  const part4 = encode(ending);
-
-  // 合并所有部分
-  const totalLength = part1.length + part2.length + part3.length + part4.length;
-  const combined = new Uint8Array(totalLength);
-  let offset = 0;
-  combined.set(part1, offset); offset += part1.length;
-  combined.set(part2, offset); offset += part2.length;
-  combined.set(part3, offset); offset += part3.length;
-  combined.set(part4, offset);
-
-  return {
-    buffer: combined.buffer,
-    contentType: 'multipart/form-data; boundary=' + boundary
-  };
-}
-
-/**
- * 上传音频文件到 DashScope
- * @param {string} filePath - 本地临时文件路径
- * @returns {Promise<string>} file_id 或 URL
- */
-function uploadVoiceFile(filePath) {
-  return new Promise((resolve, reject) => {
-    const fs = wx.getFileSystemManager();
-    // 读取为二进制 ArrayBuffer
-    fs.readFile({
-      filePath: filePath,
-      success(res) {
-        const fileBuffer = res.data; // ArrayBuffer
-        const fileName = filePath.split('/').pop() || 'voice.mp3';
-
-        // 手动构建 multipart/form-data 请求体
-        const multipart = buildMultipartBody(fileBuffer, fileName, 'voice-cloning');
-
-        wx.request({
-          url: BASE_URL + '/files',
-          method: 'POST',
-          header: {
-            'Authorization': 'Bearer ' + getApiKey(),
-            'Content-Type': multipart.contentType
-          },
-          data: multipart.buffer,
-          success(uploadRes) {
-            if (uploadRes.statusCode === 200) {
-              const fileId = uploadRes.data?.data?.uploaded_files?.[0]?.file_id ||
-                             uploadRes.data?.file_id ||
-                             uploadRes.data?.id;
-              if (fileId) {
-                console.log('[DashScope] 上传成功，file_id:', fileId);
-                resolve(fileId);
-              } else {
-                reject(new Error('上传失败: 未返回 file_id，响应: ' + JSON.stringify(uploadRes.data)));
-              }
-            } else {
-              reject(new Error('上传失败 (' + uploadRes.statusCode + '): ' + JSON.stringify(uploadRes.data)));
-            }
-          },
-          fail(err) {
-            reject(new Error('上传请求失败: ' + (err.errMsg || JSON.stringify(err))));
-          }
-        });
-      },
-      fail(err) {
-        reject(new Error('读取文件失败: ' + err.errMsg));
-      }
-    });
-  });
-}
-
-/**
- * 声音克隆 - 创建自定义音色
- * @param {string} fileId   - DashScope 文件 ID
- * @param {string} voiceName - 音色名称
- * @returns {Promise<string>} voice_id
- */
-function cloneVoice(fileId, voiceName) {
-  return new Promise((resolve, reject) => {
-    wx.request({
-      url: BASE_URL + '/services/audio/tts/customization',
-      method: 'POST',
-      header: {
-        'Authorization': 'Bearer ' + getApiKey(),
-        'Content-Type': 'application/json'
-      },
-      data: {
-        model: 'voice-enrollment',
-        action: 'create_voice',
-        target_model: 'cosyvoice-v3.5-plus',
-        prefix: 'storytime',
-        voice_name: voiceName || 'default_voice',
-        file_id: fileId,
-        enable_preprocess: true,
-        max_prompt_audio_length: 20.0
-      },
-      success(res) {
-        if (res.statusCode === 200) {
-          const voiceId = res.data?.output?.voice_id;
-          if (voiceId) {
-              console.log('[DashScope] 克隆成功，voice_id:', voiceId);
-              resolve(voiceId);
-            } else {
-              reject(new Error('克隆失败: ' + JSON.stringify(res.data)));
-            }
-        } else {
-          reject(new Error('克隆请求失败 (' + res.statusCode + '): ' + JSON.stringify(res.data)));
-        }
-      },
-      fail(err) {
-        reject(new Error('克隆请求失败: ' + (err.errMsg || JSON.stringify(err))));
-      }
-    });
-  });
-}
-
-/**
- * 查询音色部署状态
- * @param {string} voiceId
- * @returns {Promise<boolean>} 是否就绪
- */
-function waitVoiceReady(voiceId, maxWaitSec = 180) {
-  return new Promise((resolve, reject) => {
-    const startTime = Date.now();
-    const check = () => {
-      if (Date.now() - startTime > maxWaitSec * 1000) {
-        reject(new Error('音色部署超时，请重试'));
-        return;
-      }
-      wx.request({
-        url: BASE_URL + '/services/audio/tts/customization',
-        method: 'POST',
-        header: {
-          'Authorization': 'Bearer ' + getApiKey(),
-          'Content-Type': 'application/json'
-        },
-        data: {
-          model: 'voice-enrollment',
-          action: 'query_voice',
-          voice_id: voiceId
-        },
-        success(res) {
-          const status = res.data?.output?.status || '';
-          console.log('[DashScope] 音色状态:', status);
-          if (status === 'OK') {
-            resolve(true);
-          } else if (status === 'FAILED') {
-            reject(new Error('音色部署失败'));
-          } else {
-            setTimeout(check, 5000);
-          }
-        },
-        fail(err) {
-          setTimeout(check, 5000);
-        }
-      });
+  if (responseType) opts.responseType = responseType;
+  return new Promise(function (resolve, reject) {
+    opts.success = function (res) {
+      if (res.statusCode === 200) resolve(res);
+      else reject(new Error('API 请求失败 (' + res.statusCode + '): ' + JSON.stringify(res.data)));
     };
-    check();
+    opts.fail = function (err) {
+      reject(new Error('网络请求失败: ' + (err.errMsg || JSON.stringify(err))));
+    };
+    wx.request(opts);
   });
 }
 
+// ── 声音设计 ──────────────────────────────────────────
 /**
- * 调用 Qwen 生成故事文本
- * @param {string} theme
- * @param {number} lengthWords
- * @returns {Promise<string>} 故事文本
+ * 根据文字描述创建定制音色
+ * @param {string} voicePrompt   - 声音特征描述，最长500字
+ * @param {string} previewText   - 预览文本（用于生成试听）
+ * @param {string} prefix        - 音色名称前缀
+ * @returns {Promise<{voiceId:string, previewAudio:string}>}
  */
-function generateStory(theme, lengthWords = 600) {
-  return new Promise((resolve, reject) => {
-    wx.request({
-      url: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation',
-      method: 'POST',
-      header: {
-        'Authorization': 'Bearer ' + getApiKey(),
-        'Content-Type': 'application/json'
-      },
-      data: {
-        model: 'qwen-max',
-        input: {
-          messages: [
-            {
-              role: 'system',
-              content: '你是一位温柔的睡前故事讲述者，创作优美舒缓的睡前故事，帮助听众放松入睡。语言优美、节奏舒缓，充满想象力但不刺激。'
-            },
-            {
-              role: 'user',
-              content: `请创作一个以「${theme}」为主题的睡前故事。故事长度约 ${lengthWords} 字，语言优美舒缓，适合朗读，结尾温馨，避免使用恐怖、紧张情节。直接输出故事正文，不要标题，不要引号包裹。`
-            }
-          ]
-        },
-        parameters: {
-          result_format: 'message'
-        }
-      },
-      success(res) {
-        if (res.statusCode === 200) {
-          const text = res.data?.output?.choices?.[0]?.message?.content || '';
-          if (text) {
-            console.log('[DashScope] 故事生成成功，字数:', text.length);
-            resolve(text);
-          } else {
-            reject(new Error('故事生成失败: 响应为空'));
-          }
-        } else {
-          reject(new Error('故事生成失败 (' + res.statusCode + '): ' + JSON.stringify(res.data)));
-        }
-      },
-      fail(err) {
-        reject(new Error('故事生成请求失败: ' + (err.errMsg || JSON.stringify(err))));
-      }
-    });
+function createVoice(voicePrompt, previewText, prefix) {
+  prefix = prefix || 'sb';
+  previewText = previewText || '你好，我是声伴，将用温柔的声音为你讲述睡前故事。';
+  return apiPost('/services/audio/tts/customization', {
+    model: 'voice-enrollment',
+    input: {
+      action: 'create_voice',
+      target_model: 'cosyvoice-v3.5-plus',
+      voice_prompt: voicePrompt,
+      preview_text: previewText,
+      prefix: prefix,
+      language_hints: ['zh']
+    },
+    parameters: {
+      sample_rate: 24000,
+      response_format: 'mp3'
+    }
+  }).then(function (res) {
+    var output = res.data.output || {};
+    if (!output.voice_id) {
+      throw new Error('声音创建失败: ' + JSON.stringify(res.data));
+    }
+    return {
+      voiceId: output.voice_id,
+      previewAudio: output.preview_audio ? output.preview_audio.data : null,
+      targetModel: output.target_model
+    };
   });
 }
 
 /**
- * 语音合成 - 用克隆的声音讲故事
- * @param {string} voiceId - 克隆的音色 ID
+ * 查询音色状态
+ * @param {string} voiceId
+ * @returns {Promise<string>} DEPLOYING | OK | UNDEPLOYED | FAILED
+ */
+function queryVoiceStatus(voiceId) {
+  return apiPost('/services/audio/tts/customization', {
+    model: 'voice-enrollment',
+    input: {
+      action: 'query_voice',
+      voice_id: voiceId
+    }
+  }).then(function (res) {
+    var output = res.data.output || {};
+    return output.status || '';
+  });
+}
+
+/**
+ * 轮询等待音色部署就绪
+ * @param {string} voiceId
+ * @param {number} maxWaitSec
+ * @returns {Promise<boolean>}
+ */
+function waitVoiceReady(voiceId, maxWaitSec) {
+  maxWaitSec = maxWaitSec || 300;
+  var start = Date.now();
+  return new Promise(function (resolve, reject) {
+    (function check() {
+      if (Date.now() - start > maxWaitSec * 1000) {
+        return reject(new Error('音色部署超时，请稍后重试'));
+      }
+      queryVoiceStatus(voiceId).then(function (status) {
+        console.log('[声伴] 音色状态:', status);
+        if (status === 'OK') resolve(true);
+        else if (status === 'FAILED' || status === 'UNDEPLOYED') reject(new Error('音色审核未通过，请尝试其他描述'));
+        else setTimeout(check, 5000);
+      }).catch(function () {
+        setTimeout(check, 5000);
+      });
+    })();
+  });
+}
+
+// ── 故事生成 ──────────────────────────────────────────
+/**
+ * 调用 Qwen 生成睡前故事
+ * @param {string} customDesc   - 用户自定义故事描述
+ * @param {string} category     - 故事分类（可选，与customDesc二选一）
+ * @param {number} lengthChars  - 故事字数
+ * @returns {Promise<string>}   故事文本
+ */
+function generateStory(customDesc, category, lengthChars) {
+  lengthChars = Math.min(lengthChars || 1250, MAX_CHARS);
+  var systemPrompt = (
+    '你是一位优秀的睡前故事创作者。创作优美、舒缓、温暖的睡前故事，帮助听众放松身心，安然入睡。\n' +
+    '要求：语言优美流畅、节奏舒缓、情节温暖治愈、充满想象力但不刺激、结尾温馨有安全感。\n' +
+    '禁止：恐怖、惊悚、悲伤、暴力情节，禁止过于复杂的设定。\n' +
+    '直接输出故事正文，用小段落分隔，适合逐段朗读。不要标题、不要引号包裹、不要前言后记。'
+  );
+
+  var userPrompt;
+  if (customDesc && customDesc.trim()) {
+    userPrompt = '请根据以下描述创作睡前故事：' + customDesc.trim() + '\n故事长度约 ' + lengthChars + ' 字。请直接开始讲故事。';
+  } else {
+    var cat = category || '温暖治愈';
+    userPrompt = '创作一篇' + cat + '风格的睡前故事。故事长度约 ' + lengthChars + ' 字。请直接开始讲故事。';
+  }
+
+  return apiPost('/services/aigc/text-generation/generation', {
+    model: 'qwen-max',
+    input: {
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ]
+    },
+    parameters: { result_format: 'message' }
+  }).then(function (res) {
+    var choices = res.data.output && res.data.output.choices;
+    var text = (choices && choices[0] && choices[0].message && choices[0].message.content) || '';
+    if (!text) throw new Error('故事生成失败，响应为空');
+    console.log('[声伴] 故事生成成功，字数:', text.length);
+    return text;
+  });
+}
+
+// ── 语音合成 ──────────────────────────────────────────
+/**
+ * TTS 语音合成（支持长文本分段合成）
+ * @param {string} voiceId  - 声音设计产生的 voice_id
  * @param {string} text     - 故事文本
- * @returns {Promise<string>} 音频临时文件路径
+ * @returns {Promise<string>} 本地临时音频路径
  */
 function synthesizeAudio(voiceId, text) {
-  return new Promise((resolve, reject) => {
+  // 长文本分段（每段最多 2000 字，避免单次请求过大）
+  var maxChunk = 2000;
+  if (text.length <= maxChunk) {
+    return synthesizeChunk(voiceId, text);
+  }
+  // 按段落边界分段
+  var chunks = splitText(text, maxChunk);
+  console.log('[声伴] 文本分为 ' + chunks.length + ' 段合成');
+  var results = [];
+  return chunks.reduce(function (chain, chunk) {
+    return chain.then(function () {
+      return synthesizeChunk(voiceId, chunk).then(function (path) {
+        results.push(path);
+      });
+    });
+  }, Promise.resolve()).then(function () {
+    // 简单拼接：返回最后一段的路径作为主路径，存储全部段
+    // 实际播放需逐段切换，这里先简化：返回所有路径数组
+    // 播放器在 index.js 里处理多段
+    return results;
+  });
+}
+
+function synthesizeChunk(voiceId, text) {
+  return new Promise(function (resolve, reject) {
     wx.request({
-      url: 'https://dashscope.aliyuncs.com/api/v1/services/audio/tts/generation',
+      url: BASE_URL + '/services/audio/tts/generation',
       method: 'POST',
       header: {
         'Authorization': 'Bearer ' + getApiKey(),
         'Content-Type': 'application/json',
-        'X-DashScope-Output-Type': 'binary'  // 直接返回音频二进制
+        'X-DashScope-Output-Type': 'binary'
       },
       responseType: 'arraybuffer',
       data: {
         model: 'cosyvoice-v3.5-plus',
-        input: {
-          voice: voiceId,
-          text: text
-        },
-        parameters: {
-          sample_rate: 22050,
-          format: 'mp3'
-        }
+        input: { voice: voiceId, text: text },
+        parameters: { sample_rate: 22050, format: 'mp3' }
       },
-      success(res) {
+      success: function (res) {
         if (res.statusCode === 200 && res.data) {
-          // 保存音频到临时文件
-          const fs = wx.getFileSystemManager();
-          const tempPath = wx.env.USER_DATA_PATH + '/story_' + Date.now() + '.mp3';
-          fs.writeFileSync(tempPath, res.data, 'binary');
-          console.log('[DashScope] 音频合成成功:', tempPath);
-          resolve(tempPath);
+          var fs = wx.getFileSystemManager();
+          var path = wx.env.USER_DATA_PATH + '/chunk_' + Date.now() + '_' + Math.random().toString(36).slice(2,6) + '.mp3';
+          try {
+            fs.writeFileSync(path, res.data, 'binary');
+            resolve(path);
+          } catch (e) {
+            reject(new Error('保存音频失败: ' + e.message));
+          }
         } else {
-          reject(new Error('音频合成失败 (' + res.statusCode + ')'));
+          reject(new Error('TTS 失败 (' + res.statusCode + ')'));
         }
       },
-      fail(err) {
-        reject(new Error('音频合成请求失败: ' + (err.errMsg || JSON.stringify(err))));
+      fail: function (err) {
+        reject(new Error('TTS 请求失败: ' + (err.errMsg || JSON.stringify(err))));
       }
     });
   });
 }
 
+function splitText(text, maxLen) {
+  var chunks = [];
+  var paragraphs = text.split(/\n+/);
+  var current = '';
+  for (var i = 0; i < paragraphs.length; i++) {
+    var p = paragraphs[i].trim();
+    if (!p) continue;
+    if (current && (current.length + p.length > maxLen)) {
+      chunks.push(current.trim());
+      current = p;
+    } else {
+      current = current ? current + '\n' + p : p;
+    }
+  }
+  if (current.trim()) chunks.push(current.trim());
+  if (chunks.length === 0) chunks.push(text);
+  return chunks;
+}
+
+// ── 导出 ──────────────────────────────────────────────
 module.exports = {
-  setApiKey,
-  getApiKey,
-  uploadVoiceFile,
-  cloneVoice,
-  waitVoiceReady,
-  generateStory,
-  synthesizeAudio
+  CHARS_PER_MINUTE: CHARS_PER_MINUTE,
+  MAX_MINUTES: MAX_MINUTES,
+  MAX_CHARS: MAX_CHARS,
+  setApiKey: setApiKey,
+  getApiKey: getApiKey,
+  createVoice: createVoice,
+  queryVoiceStatus: queryVoiceStatus,
+  waitVoiceReady: waitVoiceReady,
+  generateStory: generateStory,
+  synthesizeAudio: synthesizeAudio
 };

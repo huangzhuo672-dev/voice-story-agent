@@ -1,18 +1,12 @@
-<!--pages/index/index.wxml - 主页模板（直连 DashScope 版）-->
+<!-- 声伴 v2.0 首页 — 声音设计版 -->
 <view class="page-container">
 
-  <!-- API Key 输入弹窗 -->
+  <!-- API Key 弹窗 -->
   <view class="apikey-mask" wx:if="{{showApiKeyDialog}}">
     <view class="apikey-dialog">
       <text class="dialog-title">🔑 输入 DashScope API Key</text>
-      <text class="dialog-desc">在 dashscope.aliyun.com 获取免费 API Key\n新用户有充足免费额度</text>
-      <input
-        class="apikey-input"
-        placeholder="sk-xxxxxxxxxxxxxxxx"
-        value="{{inputApiKey}}"
-        bindinput="onApiKeyInput"
-        password="{{false}}"
-      />
+      <text class="dialog-desc">在 dashscope.aliyun.com 免费获取\n新用户有充足免费额度</text>
+      <input class="apikey-input" placeholder="sk-xxxx" value="{{inputApiKey}}" bindinput="onApiKeyInput" password="{{false}}" />
       <view class="dialog-btns">
         <view class="dialog-btn cancel" bindtap="cancelApiKey" wx:if="{{hasApiKey}}">取消</view>
         <view class="dialog-btn confirm" bindtap="confirmApiKey">确认</view>
@@ -20,158 +14,171 @@
     </view>
   </view>
 
-  <!-- 顶部标题区 -->
+  <!-- 顶部 -->
   <view class="header">
     <view class="title-row">
       <text class="moon-icon">🌙</text>
       <text class="title">声伴</text>
       <view class="key-btn" bindtap="showApiKeyInput">🔑</view>
     </view>
-    <text class="subtitle">用你爱的人的声音，伴你入眠</text>
+    <text class="subtitle">用你理想的声音，伴你入眠</text>
   </view>
 
-  <!-- 声音样本区 -->
-  <view class="card voice-card">
-    <view class="card-title">
-      <text class="card-icon">🎤</text>
-      <text>声音样本</text>
-    </view>
-    <text class="card-desc">上传或录制一段 10~30 秒的声音，用于克隆声音</text>
-    
-    <!-- 已上传 -->
-    <view class="voice-uploaded" wx:if="{{voiceUploaded}}">
-      <view class="voice-info">
-        <text class="voice-name">{{voiceFileName}}</text>
-        <text class="voice-duration">{{voiceDuration}}秒</text>
-      </view>
-      <view class="voice-actions">
-        <view class="btn-play" bindtap="playVoiceSample">
-          <text>{{isPlayingSample ? '⏸' : '▶️'}}</text>
-        </view>
-        <view class="btn-delete" bindtap="deleteVoiceSample">
-          <text>🗑️</text>
-        </view>
-      </view>
-    </view>
+  <!-- ==================== 1. 选择声音风格 ==================== -->
+  <view class="card">
+    <view class="card-title"><text class="card-icon">🎙️</text><text>选择声音风格</text></view>
+    <text class="card-desc">选择你喜欢的声音，将用它为你讲故事</text>
 
-    <!-- 未上传 - 操作按钮 -->
-    <view class="voice-actions-row" wx:else>
-      <view class="action-btn record-btn {{isRecording ? 'recording' : ''}}" bindtap="toggleRecord">
-        <text class="action-icon">{{isRecording ? '⏹' : '🎙️'}}</text>
-        <text class="action-text">{{isRecording ? '停止录音' : '录制声音'}}</text>
-      </view>
-      <view class="action-btn upload-btn" bindtap="chooseVoiceFile">
-        <text class="action-icon">📁</text>
-        <text class="action-text">上传文件</text>
-      </view>
-    </view>
-
-    <!-- 录音中动画 -->
-    <view class="recording-animation" wx:if="{{isRecording}}">
-      <view class="recording-wave">
-        <view class="wave-bar"></view>
-        <view class="wave-bar"></view>
-        <view class="wave-bar"></view>
-        <view class="wave-bar"></view>
-        <view class="wave-bar"></view>
-      </view>
-      <text class="recording-time">{{recordingTime}}秒</text>
-    </view>
-
-    <!-- 上传/克隆中提示 -->
-    <view class="uploading-hint" wx:if="{{uploading}}">
-      <text class="hint-text">⏳ 正在处理声音样本，请稍候...</text>
-    </view>
-  </view>
-
-  <!-- 故事主题区 -->
-  <view class="card theme-card">
-    <view class="card-title">
-      <text class="card-icon">📖</text>
-      <text>故事主题</text>
-    </view>
-    <text class="card-desc">选择一个主题，或输入自定义主题</text>
-    
-    <view class="theme-tags">
-      <view 
-        class="theme-tag {{selectedTheme === item ? 'selected' : ''}}"
-        wx:for="{{themes}}"
-        wx:key="index"
-        bindtap="selectTheme"
-        data-theme="{{item}}"
+    <view class="voice-grid">
+      <view
+        class="voice-card {{selectedVoiceStyle === item.id ? 'selected' : ''}}"
+        wx:for="{{voiceStyles}}" wx:key="id"
+        bindtap="selectVoiceStyle" data-id="{{item.id}}"
       >
-        {{item}}
+        <text class="voice-emoji">
+          {{item.id === 'gentle-female' ? '👩‍🦰' : ''}}
+          {{item.id === 'deep-male' ? '🧔' : ''}}
+          {{item.id === 'warm-elder' ? '👵' : ''}}
+          {{item.id === 'clear-youth' ? '🧑' : ''}}
+          {{item.id === 'sweet-girl' ? '👧' : ''}}
+          {{item.id === 'calm-neutral' ? '🎧' : ''}}
+        </text>
+        <text class="voice-label">{{item.label}}</text>
       </view>
     </view>
 
-    <view class="custom-theme">
-      <input 
-        class="theme-input"
-        placeholder="输入自定义主题..."
-        value="{{customTheme}}"
-        bindinput="onCustomThemeInput"
-        bindconfirm="onCustomThemeConfirm"
+    <!-- 创建声音按钮 -->
+    <button
+      class="create-voice-btn"
+      bindtap="createVoiceNow"
+      disabled="{{voiceCreating || !selectedVoiceStyle}}"
+      loading="{{voiceCreating}}"
+    >
+      {{voiceCreating ? '创建中...' : (voiceOnline ? '✅ 音色已就绪' : '🔊 创建我的声音')}}
+    </button>
+    <text class="block-tip" wx:if="{{!voiceOnline && !voiceCreating}}">选择风格后，点击按钮创建音色</text>
+  </view>
+
+  <!-- ==================== 2. 故事内容 ==================== -->
+  <view class="card">
+    <view class="card-title"><text class="card-icon">📖</text><text>故事内容</text></view>
+    <text class="card-desc">分类或自定义，想听什么就写什么</text>
+
+    <!-- 分类标签 + 随机按钮 -->
+    <view class="category-row">
+      <scroll-view class="cat-scroll" scroll-x="true">
+        <view
+          class="cat-tag {{selectedCategory === item.id ? 'selected' : ''}}"
+          wx:for="{{categories}}" wx:key="id"
+          bindtap="selectCategory" data-id="{{item.id}}"
+        >
+          <text class="cat-label">{{item.label}}</text>
+          <text class="cat-desc">{{item.desc}}</text>
+        </view>
+      </scroll-view>
+      <view class="random-btn" bindtap="randomCategory">
+        <text class="random-icon">🎲</text>
+      </view>
+    </view>
+
+    <!-- 自定义描述输入 -->
+    <view class="desc-input-area">
+      <input
+        class="desc-input"
+        placeholder="描述你想听的故事，比如：一只小老鼠在森林里探险，遇到了一只会魔法的小兔子……"
+        value="{{customStoryDesc}}"
+        bindinput="onStoryDescInput"
+        maxlength="500"
       />
     </view>
   </view>
 
-  <!-- 故事长度 -->
-  <view class="card length-card">
-    <view class="card-title">
-      <text class="card-icon">⏱️</text>
-      <text>故事长度</text>
+  <!-- ==================== 3. 故事长度 ==================== -->
+  <view class="card">
+    <view class="card-title"><text class="card-icon">⏱️</text><text>故事长度</text></view>
+    <view class="length-info">
+      <text class="length-val">{{storyMinutes}} 分钟</text>
+      <text class="length-hint">约 {{storyWordCount}} 字</text>
     </view>
-    <view class="length-options">
-      <view 
-        class="length-btn {{storyLength === item.value ? 'selected' : ''}}"
-        wx:for="{{lengthOptions}}"
-        wx:key="value"
-        bindtap="selectLength"
-        data-value="{{item.value}}"
+    <slider
+      class="length-slider"
+      min="{{minMinutes}}"
+      max="{{maxMinutes}}"
+      step="1"
+      value="{{storyMinutes}}"
+      bindchange="onLengthChange"
+      activeColor="#667eea"
+      backgroundColor="rgba(255,255,255,0.1)"
+      block-size="24"
+    />
+    <view class="length-labels">
+      <text>1分</text>
+      <text>10分</text>
+      <text>30分</text>
+      <text>60分</text>
+    </view>
+  </view>
+
+  <!-- ==================== 4. 定时关闭 ==================== -->
+  <view class="card timer-card">
+    <view class="card-title"><text class="card-icon">⏲️</text><text>定时关闭</text></view>
+    <text class="card-desc">设定时长，到时自动停止播放</text>
+
+    <view class="timer-options">
+      <view
+        class="timer-btn {{timerMinutes === item.value ? 'active' : ''}}"
+        wx:for="{{timerOptions}}" wx:key="value"
+        bindtap="selectTimer" data-value="{{item.value}}"
       >
-        <text class="length-label">{{item.label}}</text>
-        <text class="length-desc">{{item.desc}}</text>
+        {{item.label}}
       </view>
     </view>
+
+    <!-- 倒计时条 -->
+    <view class="timer-bar-wrap" wx:if="{{timerRunning}}">
+      <view class="timer-bar">
+        <view class="timer-bar-fill" style="width: {{timerBarPercent}}%"></view>
+      </view>
+      <text class="timer-remaining">{{timerDisplay}} 后停止</text>
+    </view>
   </view>
 
-  <!-- 生成按钮 -->
+  <!-- ==================== 5. 生成按钮 ==================== -->
   <view class="generate-area">
-    <button 
+    <button
       class="generate-btn {{isGenerating ? 'generating' : ''}}"
-      bindtap="generateStory"
-      disabled="{{isGenerating || !voiceUploaded}}"
+      bindtap="onGenerate"
+      disabled="{{isGenerating}}"
     >
-      <text wx:if="{{isGenerating}}" class="btn-loading">⏳ 生成中 {{generateProgress}}%</text>
+      <text wx:if="{{isGenerating}}">⏳ 生成中 {{generateProgress}}%</text>
       <text wx:else>✨ 开始生成故事</text>
     </button>
-    <text class="generate-tip" wx:if="{{!voiceUploaded}}">请先上传声音样本</text>
-    <text class="generate-tip" wx:elif="{{!selectedTheme && !customTheme}}">请选择或输入故事主题</text>
-    <text class="generate-tip" wx:else>预计需要 1~2 分钟，请耐心等待</text>
+    <text class="generate-tip" wx:if="{{!voiceOnline}}">请先选择声音风格并创建音色</text>
+    <text class="generate-tip" wx:elif="{{!selectedCategory && !customStoryDesc}}">请选择分类或输入故事描述</text>
+    <text class="generate-tip" wx:else>预计 30秒~2分钟，请耐心等待 ✨</text>
   </view>
 
-  <!-- 生成结果 -->
+  <!-- ==================== 6. 生成结果 ==================== -->
   <view class="card result-card" wx:if="{{generatedStory}}">
-    <view class="card-title">
-      <text class="card-icon">🎧</text>
-      <text>生成完成</text>
+    <view class="card-title"><text class="card-icon">🎧</text><text>生成完成</text></view>
+
+    <!-- 故事文本（可折叠） -->
+    <view class="story-toggle" bindtap="onToggleStory">
+      <text>📜 故事内容（点{{storyExpanded ? '击收起' : '击展开'}}）</text>
     </view>
-    
-    <view class="story-text-area">
-      <text class="story-label">故事内容：</text>
+    <view class="story-text-area" wx:if="{{storyExpanded}}">
       <text class="story-text">{{generatedStory}}</text>
     </view>
 
+    <!-- 播放器 -->
     <view class="audio-player">
       <view class="player-progress">
-        <slider 
-          min="0" 
-          max="{{audioDuration}}" 
-          value="{{audioCurrentTime}}"
+        <slider
+          min="0" max="{{audioDuration}}" value="{{audioCurrentTime}}"
           bindchange="onSliderChange"
           activeColor="#667eea"
           backgroundColor="rgba(255,255,255,0.1)"
-          block-size="20"
+          block-size="18"
         />
         <view class="time-row">
           <text>{{audioCurrentTimeText}}</text>
@@ -179,20 +186,19 @@
         </view>
       </view>
       <view class="player-controls">
-        <view class="ctrl-btn" bindtap="replayStory">
-          <text>⏮️</text>
-        </view>
+        <view class="ctrl-btn" bindtap="replayStory"><text>⏮️</text></view>
         <view class="ctrl-btn play-btn" bindtap="togglePlayStory">
           <text>{{isPlayingStory ? '⏸️' : '▶️'}}</text>
         </view>
-        <view class="ctrl-btn" bindtap="saveStory">
-          <text>💾</text>
-        </view>
+        <view class="ctrl-btn" bindtap="saveStory"><text>💾</text></view>
       </view>
+      <text class="chunk-info" wx:if="{{audioChunks.length > 1}}">
+        第 {{currentChunkIndex + 1}} / {{audioChunks.length}} 段
+      </text>
     </view>
   </view>
 
-  <!-- 加载动画遮罩 -->
+  <!-- 加载遮罩 -->
   <view class="loading-mask" wx:if="{{isGenerating}}">
     <view class="loading-content">
       <view class="loading-stars">
@@ -203,15 +209,16 @@
       <text class="loading-text">{{loadingText}}</text>
       <view class="loading-steps">
         <view class="step {{currentStep >= 1 ? 'done' : ''}}">
-          <text>{{currentStep > 1 ? '✅' : (currentStep == 1 ? '🔄' : '⏳')}} 生成故事内容...</text>
+          <text>{{currentStep > 1 ? '✅' : (currentStep == 1 ? '🔄' : '⏳')}} 创作故事内容</text>
         </view>
         <view class="step {{currentStep >= 2 ? 'done' : ''}}">
-          <text>{{currentStep > 2 ? '✅' : (currentStep == 2 ? '🔄' : '⏳')}} 合成语音中...</text>
+          <text>{{currentStep > 2 ? '✅' : (currentStep == 2 ? '🔄' : '⏳')}} 合成语音</text>
         </view>
         <view class="step {{currentStep >= 3 ? 'done' : ''}}">
-          <text>{{currentStep > 3 ? '✅' : (currentStep == 3 ? '🔄' : '⏳')}} 准备播放...</text>
+          <text>{{currentStep > 3 ? '✅' : (currentStep == 3 ? '🔄' : '⏳')}} 准备播放</text>
         </view>
       </view>
     </view>
   </view>
+
 </view>
