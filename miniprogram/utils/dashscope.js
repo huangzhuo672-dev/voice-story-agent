@@ -213,10 +213,8 @@ function synthesizeChunk(voiceId, text) {
       timeout: 180000,
       header: {
         'Authorization': 'Bearer ' + getApiKey(),
-        'Content-Type': 'application/json',
-        'X-DashScope-Output-Type': 'binary'
+        'Content-Type': 'application/json'
       },
-      responseType: 'arraybuffer',
       data: {
         model: 'cosyvoice-v3.5-plus',
         input: { voice: voiceId, text: text },
@@ -224,16 +222,25 @@ function synthesizeChunk(voiceId, text) {
       },
       success: function (res) {
         if (res.statusCode === 200 && res.data) {
+          var output = res.data.output || res.data;
+          // DashScope TTS 返回 JSON，音频在 base64 字段中
+          var audioBase64 = output.audio || output.data || output.audio_data || '';
+          if (!audioBase64) {
+            reject(new Error('TTS 响应无音频数据: ' + JSON.stringify(res.data).substring(0, 200)));
+            return;
+          }
           var fs = wx.getFileSystemManager();
           var path = wx.env.USER_DATA_PATH + '/chunk_' + Date.now() + '_' + Math.random().toString(36).slice(2,6) + '.mp3';
           try {
-            fs.writeFileSync(path, res.data, 'binary');
+            // 将 base64 转为 ArrayBuffer 再写入
+            var ab = wx.base64ToArrayBuffer(audioBase64);
+            fs.writeFileSync(path, ab, 'binary');
             resolve(path);
           } catch (e) {
-            reject(new Error('保存音频失败: ' + e.message));
+            reject(new Error('保存音频失败: ' + e.message + ', responseKeys:' + JSON.stringify(Object.keys(res.data)).substring(0, 200)));
           }
         } else {
-          reject(new Error('TTS 失败 (' + res.statusCode + ')'));
+          reject(new Error('TTS 失败 (' + res.statusCode + '): ' + JSON.stringify(res.data).substring(0, 300)));
         }
       },
       fail: function (err) {
