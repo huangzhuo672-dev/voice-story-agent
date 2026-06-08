@@ -1,7 +1,6 @@
 // pages/index/index.js — 声伴 v2.0 声音设计版
 var dashscope = require('../../utils/dashscope.js');
-var innerAudioContext = wx.createInnerAudioContext();
-var bgAudio = null; // 后台播放
+var innerAudioContext = null;
 
 Page({
   data: {
@@ -12,12 +11,12 @@ Page({
 
     // ============ 声音设计 ============
     voiceStyles: [
-      { id: 'gentle-female',  label: '温柔女声', prompt: '一位温柔的年轻女性，声音轻柔温暖，语速缓慢舒适，像妈妈在床边轻声细语，让人感到安心放松。适合讲述温馨睡前故事。', preview: '宝贝，闭上眼睛，听我给你讲一个温暖的故事……' },
-      { id: 'deep-male',     label: '深沉男声', prompt: '一位温和的中年男性，声音低沉磁性，语速平稳从容，像慈祥的长辈在讲故事，给人安全感。适合讲长篇睡前故事。', preview: '夜深了，让我用声音为你编织一个好梦……' },
-      { id: 'warm-elder',    label: '慈祥长辈', prompt: '一位慈祥的长辈，声音和蔼温和，带着岁月沉淀的温暖，像奶奶在摇椅旁讲故事，让人感到无比安心。', preview: '孩子，躺好了，奶奶给你讲个故事……' },
-      { id: 'clear-youth',   label: '清朗少年', prompt: '一位清朗温和的青年，声音干净明亮，语调轻柔，像邻家大哥哥在夜色中低语，给人宁静陪伴感。', preview: '嘿，今晚让我陪你，讲一个安静的故事……' },
-      { id: 'sweet-girl',    label: '甜美姐姐', prompt: '一位温柔的姐姐，声音甜美柔和，带着关怀的语气，像姐姐哄弟弟妹妹入睡，让人感到被爱和呵护。', preview: '乖，姐姐给你讲个故事，闭上眼睛哦……' },
-      { id: 'calm-neutral',  label: '安静中性', prompt: '一位声音中性温和的讲述者，语气平和舒缓，不带明显性别特征，像深夜电台播音员，让人彻底放松。', preview: '在这个安静的夜晚，为你讲述一个温暖的故事……' }
+      { id: 'gentle-female', emoji: '👩‍🦰', label: '温柔女声', prompt: '一位温柔的年轻女性，声音轻柔温暖，语速缓慢舒适，像妈妈在床边轻声细语，让人感到安心放松。适合讲述温馨睡前故事。', preview: '宝贝，闭上眼睛，听我给你讲一个温暖的故事……' },
+      { id: 'deep-male',    emoji: '🧔', label: '深沉男声', prompt: '一位温和的中年男性，声音低沉磁性，语速平稳从容，像慈祥的长辈在讲故事，给人安全感。适合讲长篇睡前故事。', preview: '夜深了，让我用声音为你编织一个好梦……' },
+      { id: 'warm-elder',   emoji: '👵', label: '慈祥长辈', prompt: '一位慈祥的长辈，声音和蔼温和，带着岁月沉淀的温暖，像奶奶在摇椅旁讲故事，让人感到无比安心。', preview: '孩子，躺好了，奶奶给你讲个故事……' },
+      { id: 'clear-youth',  emoji: '🧑', label: '清朗少年', prompt: '一位清朗温和的青年，声音干净明亮，语调轻柔，像邻家大哥哥在夜色中低语，给人宁静陪伴感。', preview: '嘿，今晚让我陪你，讲一个安静的故事……' },
+      { id: 'sweet-girl',   emoji: '👧', label: '甜美姐姐', prompt: '一位温柔的姐姐，声音甜美柔和，带着关怀的语气，像姐姐哄弟弟妹妹入睡，让人感到被爱和呵护。', preview: '乖，姐姐给你讲个故事，闭上眼睛哦……' },
+      { id: 'calm-neutral', emoji: '🎧', label: '安静中性', prompt: '一位声音中性温和的讲述者，语气平和舒缓，不带明显性别特征，像深夜电台播音员，让人彻底放松。', preview: '在这个安静的夜晚，为你讲述一个温暖的故事……' }
     ],
     selectedVoiceStyle: '',
     voiceOnline: false,    // 音色是否部署完成
@@ -80,6 +79,7 @@ Page({
 
   // ==================== 生命周期 ====================
   onLoad: function () {
+    innerAudioContext = wx.createInnerAudioContext();
     this.initAudioPlayer();
     var key = dashscope.getApiKey();
     if (key) this.setData({ hasApiKey: true });
@@ -88,8 +88,10 @@ Page({
 
   onUnload: function () {
     this.stopAllTimers();
-    innerAudioContext.destroy();
-    if (bgAudio) bgAudio.destroy();
+    if (innerAudioContext) {
+      innerAudioContext.destroy();
+      innerAudioContext = null;
+    }
   },
 
   // ==================== API Key ====================
@@ -140,7 +142,7 @@ Page({
     dashscope.createVoice(style.prompt, style.preview, 'sb')
       .then(function (res) {
         wx.hideLoading();
-        this.data._voiceId = res.voiceId;
+        this.setData({ _voiceId: res.voiceId });
         console.log('[声伴] 声音创建成功:', res.voiceId);
         wx.showToast({ title: '声音已创建，等待审核...', icon: 'none' });
 
@@ -348,7 +350,11 @@ Page({
         that.setData({ isPlayingStory: false, audioCurrentTime: 0, audioCurrentTimeText: '00:00' });
       }
     });
+    var lastTU = 0;
     innerAudioContext.onTimeUpdate(function () {
+      var now = Date.now();
+      if (now - lastTU < 500) return;
+      lastTU = now;
       var t = Math.floor(innerAudioContext.currentTime);
       that.setData({ audioCurrentTime: t, audioCurrentTimeText: that.formatTime(t) });
     });
@@ -389,13 +395,15 @@ Page({
 
   saveStory: function () {
     if (!this.data.audioChunks.length) return;
-    // 微信保存音频（只保存第一段，完整保存需要拼接，略复杂）
-    wx.saveFileToDisk({
-      tempFilePath: this.data.audioChunks[0],
-      fileName: '声伴_' + Date.now() + '.mp3',
-      success: function () { wx.showToast({ title: '已保存', icon: 'success' }); },
-      fail: function () { wx.showToast({ title: '保存失败', icon: 'none' }); }
-    });
+    var that = this;
+    var fs = wx.getFileSystemManager();
+    var savePath = wx.env.USER_DATA_PATH + '/声伴_' + Date.now() + '.mp3';
+    try {
+      fs.saveFileSync(this.data.audioChunks[0], savePath);
+      wx.showToast({ title: '已保存', icon: 'success' });
+    } catch (e) {
+      wx.showToast({ title: '保存失败', icon: 'none' });
+    }
   },
 
   // ==================== 历史记录 ====================

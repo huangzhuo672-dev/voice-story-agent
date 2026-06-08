@@ -35,14 +35,7 @@
         wx:for="{{voiceStyles}}" wx:key="id"
         bindtap="selectVoiceStyle" data-id="{{item.id}}"
       >
-        <text class="voice-emoji">
-          {{item.id === 'gentle-female' ? '👩‍🦰' : ''}}
-          {{item.id === 'deep-male' ? '🧔' : ''}}
-          {{item.id === 'warm-elder' ? '👵' : ''}}
-          {{item.id === 'clear-youth' ? '🧑' : ''}}
-          {{item.id === 'sweet-girl' ? '👧' : ''}}
-          {{item.id === 'calm-neutral' ? '🎧' : ''}}
-        </text>
+        <text class="voice-emoji">{{item.emoji}}</text>
         <text class="voice-label">{{item.label}}</text>
       </view>
     </view>

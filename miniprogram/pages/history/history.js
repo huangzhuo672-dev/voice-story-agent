@@ -1,6 +1,5 @@
 // pages/history/history.js — 声伴 v2.0
-var app = getApp();
-var audio = wx.createInnerAudioContext();
+var audio = null;
 
 Page({
   data: {
@@ -13,13 +12,18 @@ Page({
   },
 
   onShow: function () {
+    if (!audio) audio = wx.createInnerAudioContext();
     var history = wx.getStorageSync('storyHistory') || [];
     this.setData({ history: history });
   },
 
   onUnload: function () {
-    audio.stop();
-    audio.destroy();
+    if (audio) {
+      audio.offEnded();
+      audio.stop();
+      audio.destroy();
+      audio = null;
+    }
   },
 
   playHistory: function (e) {
@@ -36,13 +40,31 @@ Page({
       chunkTotal: chunks.length || 0
     });
 
+    // 注册多段音频自动切换
+    audio.offEnded();
+    var that = this;
+    audio.onEnded(function () {
+      var idx = that.data.chunkIdx;
+      var total = that.data.chunkTotal;
+      if (idx < total - 1 && that.data.currentPlay) {
+        var nextIdx = idx + 1;
+        var chs = that.data.currentPlay.audioChunks || [];
+        if (chs[nextIdx]) {
+          that.setData({ chunkIdx: nextIdx });
+          audio.src = chs[nextIdx];
+          audio.play();
+        }
+      } else {
+        that.setData({ isPlaying: false });
+      }
+    });
+
     if (chunks.length > 0) {
       audio.src = chunks[0];
-      var that = this;
-      setTimeout(function () {
+      audio.onCanplay(function () {
         audio.play();
         that.setData({ isPlaying: true });
-      }, 300);
+      });
     }
   },
 
@@ -111,28 +133,3 @@ Page({
     });
   }
 });
-
-// 处理多段音频的自动切换
-(function () {
-  audio.onEnded(function () {
-    // 获取当前页面
-    var pages = getCurrentPages();
-    if (pages.length === 0) return;
-    var page = pages[pages.length - 1];
-    if (page.route !== 'pages/history/history') return;
-
-    var chunkIdx = page.data.chunkIdx;
-    var chunkTotal = page.data.chunkTotal;
-    if (chunkIdx < chunkTotal - 1 && page.data.currentPlay) {
-      var nextIdx = chunkIdx + 1;
-      var chunks = page.data.currentPlay.audioChunks || [];
-      if (chunks[nextIdx]) {
-        page.setData({ chunkIdx: nextIdx });
-        audio.src = chunks[nextIdx];
-        audio.play();
-      }
-    } else {
-      page.setData({ isPlaying: false });
-    }
-  });
-})();

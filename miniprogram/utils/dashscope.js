@@ -24,6 +24,7 @@ function apiPost(path, data, responseType) {
   var opts = {
     url: BASE_URL + path,
     method: 'POST',
+    timeout: 180000,
     header: {
       'Authorization': 'Bearer ' + getApiKey(),
       'Content-Type': 'application/json'
@@ -206,6 +207,7 @@ function synthesizeChunk(voiceId, text) {
     wx.request({
       url: BASE_URL + '/services/audio/tts/generation',
       method: 'POST',
+      timeout: 180000,
       header: {
         'Authorization': 'Bearer ' + getApiKey(),
         'Content-Type': 'application/json',
