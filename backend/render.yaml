@@ -1,23 +1,12 @@
-{
-  "services": [
-    {
-      "type": "web",
-      "name": "voice-story-agent",
-      "repo": "https://github.com/huangzhuo672-dev/voice-story-agent",
-      "branch": "main",
-      "rootDir": "backend",
-      "buildCommand": "pip install -r requirements.txt",
-      "startCommand": "gunicorn app:app --bind 0.0.0.0:$PORT",
-      "envVars": [
-        {
-          "key": "DASHSCOPE_API_KEY",
-          "sync": false
-        },
-        {
-          "key": "PORT",
-          "value": "5000"
-        }
-      ]
-    }
-  ]
-}
+services:
+  - type: web
+    name: voice-story-agent
+    env: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
+    envVars:
+      - key: DASHSCOPE_API_KEY
+        sync: false
+      - key: PORT
+        value: 5000

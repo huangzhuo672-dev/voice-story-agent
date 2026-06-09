@@ -172,22 +172,22 @@ function generateStory(customDesc, category, lengthChars) {
 }
 
 // ── 语音合成 ──────────────────────────────────────────
+const TTS_BACKEND = 'https://voice-story-agent.onrender.com';
+
 /**
- * TTS 语音合成（支持长文本分段合成）
- * @param {string} voiceId  - 声音设计产生的 voice_id
+ * TTS 语音合成（通过本地后端调用官方SDK）
+ * @param {string} voiceId  - 音色ID
  * @param {string} text     - 故事文本
- * @returns {Promise<string>} 本地临时音频路径
+ * @returns {Promise<string[]>} 本地音频路径数组
  */
 function synthesizeAudio(voiceId, text) {
   if (!text || !text.trim()) return Promise.resolve([]);
-  // 长文本分段（每段最多 2000 字，避免单次请求过大）
   var maxChunk = 2000;
   if (text.length <= maxChunk) {
     return synthesizeChunk(voiceId, text).then(function (path) {
       return [path];
     });
   }
-  // 按段落边界分段
   var chunks = splitText(text, maxChunk);
   console.log('[声伴] 文本分为 ' + chunks.length + ' 段合成');
   var results = [];
@@ -198,9 +198,6 @@ function synthesizeAudio(voiceId, text) {
       });
     });
   }, Promise.resolve()).then(function () {
-    // 简单拼接：返回最后一段的路径作为主路径，存储全部段
-    // 实际播放需逐段切换，这里先简化：返回所有路径数组
-    // 播放器在 index.js 里处理多段
     return results;
   });
 }
@@ -208,27 +205,15 @@ function synthesizeAudio(voiceId, text) {
 function synthesizeChunk(voiceId, text) {
   return new Promise(function (resolve, reject) {
     wx.request({
-      url: BASE_URL + '/services/aigc/multimodal-generation/generation',
+      url: TTS_BACKEND + '/tts',
       method: 'POST',
       timeout: 180000,
       responseType: 'arraybuffer',
       header: {
-        'Authorization': 'Bearer ' + getApiKey(),
         'Content-Type': 'application/json',
-        'X-DashScope-OssResourceResolve': 'enable',
-        'X-DashScope-Async': 'enable'
+        'X-Api-Key': getApiKey()
       },
-      data: {
-        model: 'cosyvoice-v3-plus',
-        input: {
-          text: text,
-          voice: voiceId
-        },
-        parameters: {
-          response_format: 'mp3',
-          sample_rate: 22050
-        }
-      },
+      data: { text: text, voiceId: voiceId },
       success: function (res) {
         if (res.statusCode === 200 && res.data) {
           var fs = wx.getFileSystemManager();
@@ -240,11 +225,11 @@ function synthesizeChunk(voiceId, text) {
             reject(new Error('保存音频失败: ' + e.message));
           }
         } else {
-          reject(new Error('TTS 失败 (' + res.statusCode + '): ' + JSON.stringify(res.data || {}).substring(0, 300)));
+          reject(new Error('TTS 后端错误 (' + res.statusCode + ')'));
         }
       },
       fail: function (err) {
-        reject(new Error('TTS 请求失败: ' + (err.errMsg || JSON.stringify(err))));
+        reject(new Error('后端连接失败: ' + (err.errMsg || '无法连接到 ' + TTS_BACKEND)));
       }
     });
   });

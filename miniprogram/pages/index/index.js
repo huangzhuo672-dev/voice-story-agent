@@ -269,41 +269,23 @@ Page({
       generatedStory: '', audioChunks: []
     });
 
-    this.startProgressSim();
-
-    // Step 1: 生成故事文本
     wx.showLoading({ title: '正在创作故事...' });
+
     dashscope.generateStory(desc, category, wordCount)
       .then(function (text) {
         wx.hideLoading();
-        console.log('[声伴] 故事:', text.length, '字');
-        that.setData({
-          generateProgress: 40, loadingText: '正在合成语音...',
-          currentStep: 2, generatedStory: text
-        });
-
-        // Step 2: TTS 合成
-        wx.showLoading({ title: '正在合成语音...' });
-        return dashscope.synthesizeAudio(that.data._voiceId, text);
-      })
-      .then(function (audioPaths) {
-        wx.hideLoading();
-        var chunks = audioPaths; // always array now
-        that.stopProgressSim();
         that.setData({
           isGenerating: false, generateProgress: 100,
           loadingText: '完成！', currentStep: 3,
-          audioChunks: chunks, currentChunkIndex: 0
+          generatedStory: text, storyExpanded: true
         });
-        that.saveToHistory(that.data.generatedStory);
+        that.saveToHistory(text);
+        console.log('[声伴] 故事生成成功，字数:', text.length);
         wx.showToast({ title: '故事生成完成！', icon: 'success' });
-        // 自动播放
-        setTimeout(function () { that.togglePlayStory(); }, 600);
       })
       .catch(function (err) {
         wx.hideLoading();
-        that.stopProgressSim();
-        that.setData({ isGenerating: false, currentStep: 0 });
+        that.setData({ isGenerating: false });
         console.error('[声伴] 生成失败:', err);
         wx.showModal({
           title: '生成失败',
@@ -311,6 +293,7 @@ Page({
           showCancel: false
         });
       });
+  },
   },
 
   // ── 模拟进度 ──
